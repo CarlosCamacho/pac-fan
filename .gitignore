@@ -1,0 +1,5 @@
+tables.inc
+drawspr.inc
+dist/*.lst
+dist/*.sym
+__pycache__/

@@ -1,0 +1,760 @@
+<title>Pac-Fan Maze Editor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a workbench -- level strip on the left, the maze on a dark CRT bed in the middle,
+   tools and the level's checks on the right. One committed dark look (the screen is the
+   subject), so colors are set explicitly rather than per theme. */
+:root {
+  --bed: #0b0d12;          /* page */
+  --panel: #151922;        /* side panels */
+  --panel-2: #1c2230;      /* raised controls */
+  --line: #2a3242;         /* hairlines */
+  --ink: #e6e9f0;          /* text */
+  --muted: #8b93a7;        /* secondary text */
+  --phosphor: #f2ef6e;     /* accent: the player's yellow */
+  --ok: #4fd18b; --warn: #f2b84b; --bad: #ff6b6b;
+  --font-display: "Silkscreen", "Courier New", monospace;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bed); color: var(--ink); font-family: var(--font-body); font-size: 14px; }
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+header.bar {
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+  padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.brand { font-family: var(--font-display); font-size: 18px; color: var(--phosphor); letter-spacing: .04em; white-space: nowrap; }
+.brand small { font-family: var(--font-body); font-size: 12px; color: var(--muted); letter-spacing: 0; margin-left: 6px; }
+#projName { background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 6px 8px; font: inherit; min-width: 0; width: 220px; max-width: 100%; }
+.spacer { flex: 1 1 auto; }
+button, .btn {
+  background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 10px; font: inherit; cursor: pointer; white-space: nowrap;
+}
+button:hover { border-color: #3d4860; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 1px; }
+button.primary { background: var(--phosphor); color: #16140a; border-color: var(--phosphor); font-weight: 600; }
+button[disabled] { opacity: .45; cursor: default; }
+.status { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.status.dirty { color: var(--warn); }
+
+.main { display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; min-height: 0; }
+aside { background: var(--panel); min-height: 0; overflow: auto; }
+aside.left { border-right: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+aside.right { border-left: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 16px; }
+h2 { font-family: var(--font-display); font-size: 12px; font-weight: 400; letter-spacing: .08em; color: var(--muted); margin: 0; text-transform: uppercase; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+.levels { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.lvl { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 8px; align-items: center; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); cursor: pointer; }
+.lvl.active { border-color: var(--phosphor); }
+.lvl.drop-before { box-shadow: 0 -3px 0 var(--phosphor); }
+.lvl.drop-after { box-shadow: 0 3px 0 var(--phosphor); }
+.lvl canvas { width: 64px; height: 48px; image-rendering: pixelated; border-radius: 3px; background: #000; }
+.lvl .meta { min-width: 0; }
+.lvl .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lvl .sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.grip { cursor: grab; }
+
+.stage { display: grid; grid-template-rows: auto minmax(0,1fr); min-width: 0; min-height: 0; }
+.stagebar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.stagebar label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+#zoom { width: 120px; }
+.zoomval { font-family: var(--font-mono); font-size: 12px; color: var(--muted); width: 3.5em; font-variant-numeric: tabular-nums; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; }
+.seg button[aria-pressed="true"] { background: var(--phosphor); color: #16140a; }
+.bedwrap { overflow: auto; min-height: 0; position: relative; }
+.bed { padding: 28px; display: inline-block; min-width: 100%; box-sizing: border-box; }
+canvas#maze { display: block; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line), 0 12px 40px rgba(0,0,0,.5); touch-action: none; cursor: crosshair; }
+.hint { font-size: 12px; color: var(--muted); padding: 0 12px 10px; }
+
+.tools { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; }
+.tool { display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; }
+.tool[aria-pressed="true"] { border-color: var(--phosphor); background: #2a2a1a; }
+.tool kbd { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.palette { display: grid; grid-template-columns: repeat(8, minmax(0,1fr)); gap: 6px; }
+.palette button { height: 26px; padding: 0; border-radius: 5px; }
+.palette button[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field input, .field select { background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 6px 8px; font: inherit; min-width: 0; }
+.sizes { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: end; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.checks li { display: grid; grid-template-columns: 10px minmax(0,1fr); gap: 8px; align-items: baseline; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-variant-numeric: tabular-nums; }
+.stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+.stat b { display: block; font-family: var(--font-mono); font-size: 16px; }
+.stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.lib { display: grid; gap: 6px; }
+.libitem { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 6px; align-items: center; font-size: 13px; }
+.libitem .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.libitem small { color: var(--muted); display: block; }
+textarea#jsonOut { width: 100%; box-sizing: border-box; height: 120px; background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font-family: var(--font-mono); font-size: 11px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); padding: 8px 14px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 50; }
+.dropcover { position: fixed; inset: 0; background: rgba(11,13,18,.82); border: 3px dashed var(--phosphor); display: grid; place-items: center; z-index: 40; font-family: var(--font-display); color: var(--phosphor); font-size: 20px; }
+.confirm { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--warn); }
+
+@media (max-width: 980px) {
+  .main { grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(360px, 1fr) auto; }
+  aside.left { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
+  aside.right { border-left: 0; border-top: 1px solid var(--line); }
+  .levels { flex-direction: row; overflow-x: auto; }
+  .lvl { min-width: 180px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header class="bar">
+    <div class="brand">PAC-FAN <small>maze editor</small></div>
+    <input id="projName" aria-label="Project name" value="Pac-Fan levels">
+    <span id="status" class="status">Example project</span>
+    <span class="spacer"></span>
+    <button id="btnNew" type="button">New project</button>
+    <button id="btnOpen" type="button">Open file…</button>
+    <input id="fileIn" type="file" accept=".json,application/json" hidden>
+    <button id="btnSaveFile" type="button">Save file</button>
+    <button id="btnSaveLib" type="button" class="primary">Save to library</button>
+  </header>
+
+  <div class="main">
+    <aside class="left" aria-label="Levels">
+      <div class="row" style="justify-content:space-between"><h2>Levels</h2><span class="status" id="lvlCount"></span></div>
+      <ol id="levels" class="levels"></ol>
+      <div class="row">
+        <button id="btnAddLvl" type="button">+ Level</button>
+        <button id="btnDupLvl" type="button">Duplicate</button>
+        <button id="btnDelLvl" type="button">Delete</button>
+      </div>
+      <div id="delConfirm" class="confirm" hidden>Delete this level?
+        <button id="delYes" type="button">Delete</button><button id="delNo" type="button">Keep</button></div>
+      <p class="status" style="white-space:normal">Drag a level to reorder. Drop a project .json anywhere to open it.</p>
+    </aside>
+
+    <section class="stage" aria-label="Maze">
+      <div class="stagebar">
+        <button id="undo" type="button" title="Undo (Ctrl+Z)">Undo</button>
+        <button id="redo" type="button" title="Redo (Ctrl+Y)">Redo</button>
+        <label><input type="checkbox" id="mirror" checked> Mirror left↔right</label>
+        <div class="seg" role="group" aria-label="View">
+          <button type="button" id="vEdit" aria-pressed="true">Edit view</button>
+          <button type="button" id="vCoco" aria-pressed="false">CoCo view</button>
+        </div>
+        <span class="spacer"></span>
+        <button id="zOut" type="button" aria-label="Zoom out">−</button>
+        <input id="zoom" type="range" min="1" max="6" step="0.25" value="3" aria-label="Zoom">
+        <button id="zIn" type="button" aria-label="Zoom in">+</button>
+        <span id="zoomVal" class="zoomval">300%</span>
+        <button id="zFit" type="button">Fit</button>
+      </div>
+      <div class="bedwrap" id="bedwrap"><div class="bed"><canvas id="maze"></canvas></div></div>
+      <div class="hint" id="hint">Click or drag to paint; Rectangle drags a box, Fill floods an area. Right-click erases. Move tool (M): drag a piece to a new tile. Ctrl+wheel zooms.</div>
+    </section>
+
+    <aside class="right" aria-label="Tools and level settings">
+      <div><h2>Tools</h2></div>
+      <div class="tools" id="tools"></div>
+      <div class="field"><h2>Brush</h2><div class="seg" role="group" aria-label="Brush" id="brushes"></div>
+        <div class="status" style="white-space:normal">Rectangle: drag a box. Fill: click an area to flood it. For a solid wall area, pick Solid block and drag a Rectangle.</div></div>
+      <div class="field">
+        <h2>Wall color</h2>
+        <div class="palette" id="palette"></div>
+        <div class="row" style="font-size:12px;color:var(--muted)">Picks the level's wall color. With the Paint tool, colors single walls.</div>
+      </div>
+      <div class="field">
+        <h2>Level</h2>
+        <label for="lvlName">Name</label>
+        <input id="lvlName">
+        <div class="sizes">
+          <div class="field"><label for="lvlW">Width</label><input id="lvlW" type="number" min="8" max="32"></div>
+          <div class="field"><label for="lvlH">Height</label><input id="lvlH" type="number" min="8" max="30"></div>
+          <button id="btnResize" type="button">Resize</button>
+        </div>
+        <div class="status" style="white-space:normal">The CoCo game screen fits 16 × 15 tiles.</div>
+      </div>
+      <div>
+        <h2>Checks</h2>
+        <div class="stats" id="stats" style="margin:8px 0"></div>
+        <ul class="checks" id="checks"></ul>
+      </div>
+      <div class="field">
+        <h2>Library</h2>
+        <div class="lib" id="lib"><span class="status">Connecting…</span></div>
+      </div>
+      <div class="field">
+        <h2>Project data</h2>
+        <div class="row"><button id="btnCopy" type="button">Copy JSON</button></div>
+        <textarea id="jsonOut" readonly aria-label="Project JSON"></textarea>
+      </div>
+    </aside>
+  </div>
+</div>
+<div id="dropcover" class="dropcover" hidden>Drop a project file to open it</div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+/* ---------------------------------------------------------------- model
+ * A project: { format:"pacfan-project", version:1, name, levels:[level] }
+ * A level:   { name, w, h, wallColor (0-7), rows:[string], colors:[string] }
+ *   rows chars:  '#' wall (drawn as a joined line)  'B' solid wall block
+ *                '.' dot  'o' power pill  ' ' empty
+ *                'H' ghost house  'D' house door  'P' player start
+ *                'T' tunnel mouth (edge cell; pairs with the opposite edge)
+ *   colors: same shape; '-' = level wall color, '0'-'7' = this wall's own color
+ * Colors are the MC6847 semigraphics palette the game uses.
+ */
+const VDG = [
+  { name: "Green",   hex: "#22c84a" }, { name: "Yellow", hex: "#f2ef6e" },
+  { name: "Blue",    hex: "#3a35a8" }, { name: "Red",    hex: "#a3233f" },
+  { name: "Buff",    hex: "#efefe6" }, { name: "Cyan",   hex: "#2fa67c" },
+  { name: "Magenta", hex: "#ee4fee" }, { name: "Orange", hex: "#f0763c" },
+];
+const CELL = { WALL: "#", DOT: ".", POWER: "o", EMPTY: " ", HOUSE: "H", DOOR: "D", PLAYER: "P", TUNNEL: "T" };
+const TOOLS = [
+  { id: "#", label: "Wall line", key: "1" },
+  { id: "B", label: "Solid block", key: "2" },
+  { id: ".", label: "Dot", key: "3" },
+  { id: "o", label: "Power pill", key: "4" },
+  { id: " ", label: "Empty", key: "5" },
+  { id: "H", label: "Ghost house", key: "6" },
+  { id: "D", label: "House door", key: "7" },
+  { id: "P", label: "Player start", key: "8" },
+  { id: "T", label: "Tunnel", key: "9" },
+  { id: "paint", label: "Paint wall", key: "0" },
+  { id: "move", label: "Move", key: "m" },
+];
+const BRUSHES = [ { id: "free", label: "Freehand", key: "f" }, { id: "rect", label: "Rectangle", key: "r" }, { id: "fill", label: "Fill", key: "g" } ];
+const solidish = (c) => c === "#" || c === "B";
+
+// The maze in the current game (Pac-Fan v3), as the example level.
+const GAME_LEVEL = {
+  name: "Level 1 (current game)", w: 16, h: 15, wallColor: 2,
+  rows: [
+    "################",
+    "#o.....##.....o#",
+    "#.##.#.##.#.##.#",
+    "#..............#",
+    "#.##.##..##.##.#",
+    "#....#....#....#",
+    "####.#.##.#.####",
+    "T......HH......T",
+    "####.#.##.#.####",
+    "#......##......#",
+    "#.#.##....##.#.#",
+    "#o..#..##..#..o#",
+    "#.#.#.####.#.#.#",
+    "#...#..P...#...#",
+    "################",
+  ],
+};
+function blankColors(w, h) { return Array.from({ length: h }, () => "-".repeat(w)); }
+function normLevel(l) {
+  const w = l.w || (l.rows && l.rows[0] ? l.rows[0].length : 16), h = l.h || (l.rows ? l.rows.length : 15);
+  const rows = Array.from({ length: h }, (_, y) => ((l.rows && l.rows[y]) || "").padEnd(w, " ").slice(0, w));
+  const colors = Array.from({ length: h }, (_, y) => ((l.colors && l.colors[y]) || "").padEnd(w, "-").slice(0, w));
+  return { name: l.name || "Level", w, h, wallColor: Number.isInteger(l.wallColor) ? l.wallColor : 2, rows, colors };
+}
+function newProject(name) { return { format: "pacfan-project", version: 1, name: name || "Pac-Fan levels", levels: [normLevel(GAME_LEVEL)] }; }
+function blankLevel(n, w = 16, h = 15) {
+  const rows = Array.from({ length: h }, (_, y) => (y === 0 || y === h - 1) ? "#".repeat(w) : "#" + " ".repeat(w - 2) + "#");
+  return { name: "Level " + n, w, h, wallColor: 2, rows, colors: blankColors(w, h) };
+}
+
+/* ---------------------------------------------------------------- state */
+const S = {
+  project: newProject(), cur: 0, tool: "#", brush: "free", paintColor: 2, zoom: 3, view: "edit", mirror: true,
+  dirty: false, projectId: null, undo: [], redo: [], libDocs: [], db: null, downloads: null,
+};
+const $ = (id) => document.getElementById(id);
+const lvl = () => S.project.levels[S.cur];
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2600);
+}
+function setDirty(v) {
+  S.dirty = v;
+  const st = $("status");
+  st.textContent = v ? "Unsaved changes" : (S.projectId ? "Saved to library" : "Example project");
+  st.classList.toggle("dirty", v);
+  try { localStorage.setItem("pacfan-draft", JSON.stringify({ project: S.project, projectId: S.projectId })); } catch (e) {}
+}
+
+/* ---------------------------------------------------------------- undo */
+function snapshot() { S.undo.push(JSON.stringify(lvl())); if (S.undo.length > 100) S.undo.shift(); S.redo = []; }
+function undo() { if (!S.undo.length) return; S.redo.push(JSON.stringify(lvl())); S.project.levels[S.cur] = JSON.parse(S.undo.pop()); changed(); }
+function redo() { if (!S.redo.length) return; S.undo.push(JSON.stringify(lvl())); S.project.levels[S.cur] = JSON.parse(S.redo.pop()); changed(); }
+
+/* ---------------------------------------------------------------- cell editing */
+function getC(l, x, y) { return l.rows[y][x]; }
+function setC(l, x, y, ch) { const r = l.rows[y]; l.rows[y] = r.slice(0, x) + ch + r.slice(x + 1); }
+function setCol(l, x, y, ch) { const r = l.colors[y]; l.colors[y] = r.slice(0, x) + ch + r.slice(x + 1); }
+const onEdge = (l, x, y) => x === 0 || y === 0 || x === l.w - 1 || y === l.h - 1;
+function tunnelPartner(l, x, y) {
+  if ((x === 0 || x === l.w - 1) && y > 0 && y < l.h - 1) return [l.w - 1 - x, y];
+  if ((y === 0 || y === l.h - 1) && x > 0 && x < l.w - 1) return [x, l.h - 1 - y];
+  return null;   // corners can't be tunnels
+}
+function place(l, x, y, ch) {
+  if (x < 0 || y < 0 || x >= l.w || y >= l.h) return;
+  const old = getC(l, x, y);
+  if (old === "T" && ch !== "T") { const p = tunnelPartner(l, x, y); if (p && getC(l, p[0], p[1]) === "T") setC(l, p[0], p[1], "#"); }
+  if (ch === "T") {
+    const p = tunnelPartner(l, x, y);
+    if (!p) { toast("Tunnels go on an edge, not a corner."); return; }
+    setC(l, x, y, "T"); setC(l, p[0], p[1], "T"); return;
+  }
+  if (ch === "P") { for (let yy = 0; yy < l.h; yy++) for (let xx = 0; xx < l.w; xx++) if (getC(l, xx, yy) === "P") setC(l, xx, yy, " "); }
+  setC(l, x, y, ch);
+  if (!solidish(ch)) setCol(l, x, y, "-");
+}
+function applyTool(x, y, erase) {
+  const l = lvl();
+  const targets = [[x, y]];
+  const mx = l.w - 1 - x;
+  const ch = erase ? " " : S.tool;
+  if (S.mirror && mx !== x && ch !== "P") targets.push([mx, y]);
+  for (const [tx, ty] of targets) {
+    if (ch === "paint") { if (solidish(getC(l, tx, ty))) setCol(l, tx, ty, String(S.paintColor)); }
+    else place(l, tx, ty, ch);
+  }
+}
+
+// Rectangle: every cell between two corners (mirrored too when Mirror is on).
+function applyRect(a, b, erase) {
+  const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) applyTool(x, y, erase);
+}
+// Fill: flood the 4-connected area of the clicked tile's kind (walls of either style count
+// as one kind for "Paint wall"), then the mirror image of it.
+function applyFill(x, y, erase) {
+  const l = lvl(), ch = erase ? " " : S.tool;
+  const seeds = [[x, y]]; if (S.mirror && l.w - 1 - x !== x && ch !== "P") seeds.push([l.w - 1 - x, y]);
+  const cells = [];
+  for (const [sx, sy] of seeds) {
+    const kind = getC(l, sx, sy), same = (c) => ch === "paint" ? solidish(c) && solidish(kind) : c === kind;
+    if (ch !== "paint" && kind === ch) continue;
+    const seen = new Set([sx + "," + sy]), todo = [[sx, sy]];
+    while (todo.length) {
+      const [cx0, cy0] = todo.pop(); cells.push([cx0, cy0]);
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = cx0 + dx, ny = cy0 + dy, k = nx + "," + ny;
+        if (nx < 0 || ny < 0 || nx >= l.w || ny >= l.h || seen.has(k) || !same(getC(l, nx, ny))) continue;
+        seen.add(k); todo.push([nx, ny]);
+      }
+    }
+  }
+  if (ch === "P" || ch === "T") { toast("Fill places area tiles; use Freehand for the start and tunnels."); return; }
+  for (const [cx1, cy1] of cells) {
+    if (ch === "paint") setCol(l, cx1, cy1, String(S.paintColor)); else place(l, cx1, cy1, ch);
+  }
+}
+
+/* ---------------------------------------------------------------- checks */
+function analyse(l) {
+  const out = { errors: [], warns: [], oks: [], dots: 0, pills: 0, house: 0, dead: 0, longest: 0 };
+  let players = [], doors = 0;
+  const pass = (c) => !solidish(c) && c !== "H" && c !== "D";
+  for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) {
+    const c = getC(l, x, y);
+    if (c === ".") out.dots++; else if (c === "o") out.pills++; else if (c === "H") out.house++;
+    else if (c === "D") doors++; else if (c === "P") players.push([x, y]);
+  }
+  // tunnels: every mouth needs its partner open too
+  let badT = 0;
+  for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) if (getC(l, x, y) === "T") {
+    const p = tunnelPartner(l, x, y); if (!p || getC(l, p[0], p[1]) !== "T") badT++;
+  }
+  // open border cells that are not tunnels let the player walk off the map
+  let leaks = 0;
+  for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) if (onEdge(l, x, y)) { const c = getC(l, x, y); if (!solidish(c) && c !== "T") leaks++; }
+  const nb = (x, y) => {
+    const r = [];
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      let nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= l.w || ny >= l.h) {
+        if (getC(l, x, y) !== "T") continue;
+        nx = (nx + l.w) % l.w; ny = (ny + l.h) % l.h;           // through the tunnel
+      }
+      if (pass(getC(l, nx, ny))) r.push([nx, ny]);
+    }
+    return r;
+  };
+  if (players.length === 1) {
+    const seen = new Set([players[0].join(",")]), todo = [players[0]];
+    while (todo.length) { const [x, y] = todo.pop(); for (const n of nb(x, y)) { const k = n.join(","); if (!seen.has(k)) { seen.add(k); todo.push(n); } } }
+    let unreach = 0;
+    for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) if (pass(getC(l, x, y)) && !seen.has(x + "," + y)) unreach++;
+    if (unreach) out.errors.push(unreach + " open tile" + (unreach > 1 ? "s" : "") + " the player can't reach");
+    else out.oks.push("Every open tile is reachable");
+  }
+  for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) if (pass(getC(l, x, y)) && nb(x, y).length < 2) out.dead++;
+  for (let y = 0; y < l.h; y++) { let run = 0; for (let x = 0; x < l.w; x++) { run = pass(getC(l, x, y)) ? run + 1 : 0; out.longest = Math.max(out.longest, run); } }
+
+  if (players.length === 0) out.errors.push("No player start (tool 7)");
+  else if (players.length > 1) out.errors.push("More than one player start");
+  else out.oks.push("Player start set");
+  if (badT) out.errors.push(badT + " tunnel mouth" + (badT > 1 ? "s" : "") + " without a partner");
+  if (leaks) out.errors.push(leaks + " open edge tile" + (leaks > 1 ? "s" : "") + " that aren't tunnels");
+  if (!out.house) out.warns.push("No ghost house: ghosts will start where the game puts them");
+  else if (out.house < 4) out.warns.push("Ghost house holds " + out.house + " tile" + (out.house > 1 ? "s" : "") + "; four ghosts want 4");
+  else out.oks.push("Ghost house: " + out.house + " tiles");
+  if (out.house && !doors) out.warns.push("Ghost house has no door; ghosts can only leave by an open side");
+  if (out.pills === 0) out.warns.push("No power pills");
+  if (out.dead) out.warns.push(out.dead + " dead end" + (out.dead > 1 ? "s" : ""));
+  else out.oks.push("No dead ends");
+  if (out.longest > 8) out.warns.push("Longest straight run is " + out.longest + " tiles");
+  if (l.w !== 16 || l.h !== 15) out.warns.push("The game screen fits 16 × 15; this level is " + l.w + " × " + l.h);
+  return out;
+}
+
+/* ---------------------------------------------------------------- drawing */
+const cv = $("maze"), cx = cv.getContext("2d");
+let cellW = 48, cellH = 36;
+function wallHex(l, x, y) { const c = l.colors[y][x]; return VDG[c === "-" ? l.wallColor : Number(c)].hex; }
+function isWall(l, x, y) { return x >= 0 && y >= 0 && x < l.w && y < l.h && solidish(getC(l, x, y)); }
+
+// Draw one level into a 2D context at cell size cw x ch. coco=true draws it the way the
+// game does (4 x 6 elements a tile, walls as a 2-element pipe joining neighbours).
+function drawLevel(ctx, l, cw, ch, coco, grid) {
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, l.w * cw, l.h * ch);
+  const ex = cw / 4, ey = ch / 6;
+  for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) {
+    const c = getC(l, x, y), X = x * cw, Y = y * ch;
+    if (c === "B") {
+      ctx.fillStyle = wallHex(l, x, y);
+      ctx.fillRect(X, Y, cw, ch);                       // solid: the whole tile, all 4 x 6 elements
+    } else if (c === "#") {
+      ctx.fillStyle = wallHex(l, x, y);
+      {                                                  // a joined line, as the game draws walls
+        ctx.fillRect(X + ex, Y + 2 * ey, 2 * ex, 2 * ey);
+        if (isWall(l, x + 1, y)) ctx.fillRect(X + 3 * ex, Y + 2 * ey, ex, 2 * ey);
+        if (isWall(l, x - 1, y)) ctx.fillRect(X, Y + 2 * ey, ex, 2 * ey);
+        if (isWall(l, x, y - 1)) ctx.fillRect(X + ex, Y, 2 * ex, 2 * ey);
+        if (isWall(l, x, y + 1)) ctx.fillRect(X + ex, Y + 4 * ey, 2 * ex, 2 * ey);
+      }
+    } else if (c === ".") {
+      ctx.fillStyle = "#efefe6"; ctx.fillRect(X + ex, Y + 3 * ey, 2 * ex, ey);
+    } else if (c === "o") {
+      ctx.fillStyle = "#efefe6"; ctx.fillRect(X + ex, Y + ey, 2 * ex, 4 * ey);
+    } else if (c === "H") {
+      ctx.fillStyle = coco ? "#000" : "#3a1f3a"; ctx.fillRect(X + 1, Y + 1, cw - 2, ch - 2);
+      if (!coco) { ctx.strokeStyle = "#ee4fee"; ctx.lineWidth = 1; ctx.strokeRect(X + 2.5, Y + 2.5, cw - 5, ch - 5); }
+    } else if (c === "D") {
+      ctx.fillStyle = "#ee4fee"; ctx.fillRect(X, Y + 2.5 * ey, cw, ey);
+    } else if (c === "P") {
+      ctx.fillStyle = "#f2ef6e";
+      ctx.beginPath(); const r = Math.min(cw, ch) * 0.38;
+      ctx.moveTo(X + cw / 2, Y + ch / 2); ctx.arc(X + cw / 2, Y + ch / 2, r, 0.25 * Math.PI, 1.75 * Math.PI); ctx.closePath(); ctx.fill();
+    } else if (c === "T" && !coco) {
+      ctx.fillStyle = "#1d3b5c"; ctx.fillRect(X + 1, Y + 1, cw - 2, ch - 2);
+      ctx.fillStyle = "#8fd3ff"; ctx.font = `${Math.max(8, ch * 0.5)}px ${getComputedStyle(document.body).getPropertyValue("--font-mono")}`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const horiz = x === 0 || x === l.w - 1;
+      ctx.fillText(horiz ? "⇆" : "⇅", X + cw / 2, Y + ch / 2);
+    }
+  }
+  if (grid) {
+    ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 1;
+    for (let x = 1; x < l.w; x++) { ctx.beginPath(); ctx.moveTo(x * cw + .5, 0); ctx.lineTo(x * cw + .5, l.h * ch); ctx.stroke(); }
+    for (let y = 1; y < l.h; y++) { ctx.beginPath(); ctx.moveTo(0, y * ch + .5); ctx.lineTo(l.w * cw, y * ch + .5); ctx.stroke(); }
+    if (S.mirror) { ctx.strokeStyle = "rgba(242,239,110,0.25)"; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(l.w * cw / 2 + .5, 0); ctx.lineTo(l.w * cw / 2 + .5, l.h * ch); ctx.stroke(); ctx.setLineDash([]); }
+  }
+}
+let hover = null, dragFrom = null, rectFrom = null, rectErase = false;
+function render() {
+  const l = lvl();
+  cellW = Math.round(16 * S.zoom); cellH = Math.round(12 * S.zoom);
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = l.w * cellW * dpr; cv.height = l.h * cellH * dpr;
+  cv.style.width = l.w * cellW + "px"; cv.style.height = l.h * cellH + "px";
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawLevel(cx, l, cellW, cellH, S.view === "coco", S.view === "edit");
+  if (hover && S.view === "edit") {
+    cx.strokeStyle = "#f2ef6e"; cx.lineWidth = 2;
+    cx.strokeRect(hover[0] * cellW + 1, hover[1] * cellH + 1, cellW - 2, cellH - 2);
+    if (S.mirror && hover[0] !== l.w - 1 - hover[0]) { cx.globalAlpha = .45; cx.strokeRect((l.w - 1 - hover[0]) * cellW + 1, hover[1] * cellH + 1, cellW - 2, cellH - 2); cx.globalAlpha = 1; }
+  }
+  if (rectFrom && hover) {
+    const x0 = Math.min(rectFrom[0], hover[0]), x1 = Math.max(rectFrom[0], hover[0]), y0 = Math.min(rectFrom[1], hover[1]), y1 = Math.max(rectFrom[1], hover[1]);
+    cx.fillStyle = "rgba(242,239,110,0.18)"; cx.strokeStyle = "#f2ef6e"; cx.lineWidth = 2;
+    const boxes = [[x0, x1]]; if (S.mirror) boxes.push([l.w - 1 - x1, l.w - 1 - x0]);
+    for (const [a, b] of boxes) { cx.fillRect(a * cellW, y0 * cellH, (b - a + 1) * cellW, (y1 - y0 + 1) * cellH); cx.strokeRect(a * cellW + 1, y0 * cellH + 1, (b - a + 1) * cellW - 2, (y1 - y0 + 1) * cellH - 2); }
+  }
+  if (dragFrom && hover) { cx.globalAlpha = .6; cx.fillStyle = "#f2ef6e"; cx.fillRect(hover[0] * cellW + cellW * .3, hover[1] * cellH + cellH * .3, cellW * .4, cellH * .4); cx.globalAlpha = 1; }
+  $("zoomVal").textContent = Math.round(S.zoom * 100) + "%";
+}
+
+/* ---------------------------------------------------------------- side panels */
+function renderLevels() {
+  const ol = $("levels"); ol.textContent = "";
+  S.project.levels.forEach((l, i) => {
+    const li = document.createElement("li");
+    li.className = "lvl" + (i === S.cur ? " active" : ""); li.draggable = true; li.dataset.i = i;
+    const c = document.createElement("canvas"); c.width = l.w * 4; c.height = l.h * 3;
+    drawLevel(c.getContext("2d"), l, 4, 3, false, false);
+    const meta = document.createElement("div"); meta.className = "meta";
+    const a = analyse(l);
+    const n = document.createElement("div"); n.className = "name"; n.textContent = (i + 1) + ". " + l.name;
+    const sub = document.createElement("div"); sub.className = "sub";
+    sub.textContent = a.dots + " dots · " + a.pills + " pills" + (a.errors.length ? " · " + a.errors.length + " to fix" : "");
+    meta.append(n, sub); li.append(c, meta);
+    li.addEventListener("click", () => { S.cur = i; S.undo = []; S.redo = []; refreshAll(); });
+    li.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/x-level", String(i)); e.dataTransfer.effectAllowed = "move"; });
+    li.addEventListener("dragover", (e) => {
+      if (![...e.dataTransfer.types].includes("text/x-level")) return;
+      e.preventDefault(); const r = li.getBoundingClientRect(); const after = (e.clientY - r.top) > r.height / 2;
+      li.classList.toggle("drop-after", after); li.classList.toggle("drop-before", !after);
+    });
+    li.addEventListener("dragleave", () => li.classList.remove("drop-after", "drop-before"));
+    li.addEventListener("drop", (e) => {
+      const from = Number(e.dataTransfer.getData("text/x-level")); if (Number.isNaN(from)) return;
+      e.preventDefault(); e.stopPropagation();
+      const r = li.getBoundingClientRect(); let to = i + ((e.clientY - r.top) > r.height / 2 ? 1 : 0);
+      const L = S.project.levels; const [moved] = L.splice(from, 1); if (from < to) to--; L.splice(to, 0, moved);
+      S.cur = to; setDirty(true); refreshAll();
+    });
+    ol.append(li);
+  });
+  $("lvlCount").textContent = S.project.levels.length + " level" + (S.project.levels.length > 1 ? "s" : "");
+  $("btnDelLvl").disabled = S.project.levels.length < 2;
+}
+function renderTools() {
+  const box = $("tools"); box.textContent = "";
+  for (const t of TOOLS) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "tool"; b.id = "tool-" + t.key;
+    b.setAttribute("aria-pressed", String(S.tool === t.id));
+    const sw = document.createElement("span"); sw.className = "swatch";
+    sw.style.background = { "B": VDG[lvl().wallColor].hex, "#": VDG[lvl().wallColor].hex, ".": "#efefe6", "o": "#efefe6", " ": "#000", H: "#3a1f3a", D: "#ee4fee", P: "#f2ef6e", T: "#1d3b5c", paint: VDG[S.paintColor].hex, move: "#55607a" }[t.id];
+    const lab = document.createElement("span"); lab.textContent = t.label;
+    const k = document.createElement("kbd"); k.textContent = t.key;
+    b.append(sw, lab, k);
+    b.addEventListener("click", () => { S.tool = t.id; renderTools(); });
+    box.append(b);
+  }
+  const bb = $("brushes"); bb.textContent = "";
+  for (const br of BRUSHES) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = br.label; b.title = br.label + " (" + br.key.toUpperCase() + ")";
+    b.setAttribute("aria-pressed", String(S.brush === br.id));
+    b.addEventListener("click", () => { S.brush = br.id; renderTools(); });
+    bb.append(b);
+  }
+  const pal = $("palette"); pal.textContent = "";
+  VDG.forEach((v, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.style.background = v.hex; b.title = v.name; b.setAttribute("aria-label", v.name + " walls");
+    b.setAttribute("aria-pressed", String(S.tool === "paint" ? S.paintColor === i : lvl().wallColor === i));
+    b.addEventListener("click", () => {
+      if (S.tool === "paint") S.paintColor = i;
+      else { snapshot(); lvl().wallColor = i; setDirty(true); }
+      refreshAll();
+    });
+    pal.append(b);
+  });
+}
+function renderChecks() {
+  const l = lvl(), a = analyse(l);
+  $("stats").innerHTML = "";
+  [["Dots", a.dots], ["Power pills", a.pills], ["House tiles", a.house], ["Dead ends", a.dead]].forEach(([k, v]) => {
+    const d = document.createElement("div"); d.className = "stat"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = k; d.append(b, s); $("stats").append(d);
+  });
+  const ul = $("checks"); ul.textContent = "";
+  const add = (cls, txt) => { const li = document.createElement("li"); const d = document.createElement("span"); d.className = "dot " + cls; const t = document.createElement("span"); t.textContent = txt; li.append(d, t); ul.append(li); };
+  a.errors.forEach((t) => add("bad", t)); a.warns.forEach((t) => add("warn", t)); a.oks.forEach((t) => add("ok", t));
+}
+function renderFields() {
+  const l = lvl();
+  $("lvlName").value = l.name; $("lvlW").value = l.w; $("lvlH").value = l.h;
+  $("projName").value = S.project.name;
+  $("jsonOut").value = JSON.stringify(S.project, null, 1);
+  $("undo").disabled = !S.undo.length; $("redo").disabled = !S.redo.length;
+}
+function refreshAll() { render(); renderLevels(); renderTools(); renderChecks(); renderFields(); }
+function changed() { setDirty(true); refreshAll(); }
+
+/* ---------------------------------------------------------------- canvas input */
+function cellAt(e) {
+  const r = cv.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / cellW), y = Math.floor((e.clientY - r.top) / cellH);
+  return (x >= 0 && y >= 0 && x < lvl().w && y < lvl().h) ? [x, y] : null;
+}
+let painting = false, erasing = false, last = null;
+cv.addEventListener("contextmenu", (e) => e.preventDefault());
+cv.addEventListener("pointerdown", (e) => {
+  const c = cellAt(e); if (!c) return;
+  cv.setPointerCapture(e.pointerId);
+  if (S.tool === "move" && e.button === 0) {
+    const ch = getC(lvl(), c[0], c[1]);
+    if (solidish(ch) || ch === " ") { toast("Move picks up a dot, pill, house tile, door, start or tunnel."); return; }
+    dragFrom = c; render(); return;
+  }
+  if (S.brush === "rect" && S.tool !== "move") { rectFrom = c; rectErase = e.button === 2; render(); return; }
+  if (S.brush === "fill" && S.tool !== "move") { snapshot(); applyFill(c[0], c[1], e.button === 2); changed(); return; }
+  snapshot(); painting = true; erasing = e.button === 2; last = c;
+  applyTool(c[0], c[1], erasing); changed();
+});
+cv.addEventListener("pointermove", (e) => {
+  const c = cellAt(e); const prev = hover; hover = c;
+  if (painting && c && last && (c[0] !== last[0] || c[1] !== last[1])) {
+    // walk the line between the last and this cell so fast drags leave no gaps
+    let [x0, y0] = last; const [x1, y1] = c; const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let err = dx - dy;
+    while (true) { applyTool(x0, y0, erasing); if (x0 === x1 && y0 === y1) break; const e2 = 2 * err; if (e2 > -dy) { err -= dy; x0 += sx; } if (e2 < dx) { err += dx; y0 += sy; } }
+    last = c; changed(); return;
+  }
+  if (!prev || !c || prev[0] !== c[0] || prev[1] !== c[1]) render();
+});
+cv.addEventListener("pointerleave", () => { hover = null; render(); });
+cv.addEventListener("pointerup", (e) => {
+  if (dragFrom) {
+    const c = cellAt(e);
+    if (c && (c[0] !== dragFrom[0] || c[1] !== dragFrom[1])) {
+      const l = lvl(); const ch = getC(l, dragFrom[0], dragFrom[1]);
+      snapshot();
+      if (ch === "T") { place(l, dragFrom[0], dragFrom[1], "#"); place(l, c[0], c[1], "T"); }
+      else { place(l, dragFrom[0], dragFrom[1], ch === "H" || ch === "D" ? " " : "."); place(l, c[0], c[1], ch); }
+      changed();
+    }
+    dragFrom = null; render(); return;
+  }
+  if (rectFrom) { const c = cellAt(e) || hover; if (c) { snapshot(); applyRect(rectFrom, c, rectErase); rectFrom = null; changed(); } else { rectFrom = null; render(); } return; }
+  painting = false; last = null;
+});
+
+/* ---------------------------------------------------------------- zoom */
+function setZoom(z) { S.zoom = Math.max(1, Math.min(6, Math.round(z * 4) / 4)); $("zoom").value = S.zoom; render(); }
+$("zoom").addEventListener("input", (e) => setZoom(Number(e.target.value)));
+$("zIn").addEventListener("click", () => setZoom(S.zoom + 0.25));
+$("zOut").addEventListener("click", () => setZoom(S.zoom - 0.25));
+$("zFit").addEventListener("click", () => {
+  const w = $("bedwrap").clientWidth - 56, h = $("bedwrap").clientHeight - 56;
+  setZoom(Math.min(w / (16 * lvl().w), h / (12 * lvl().h)));
+});
+$("bedwrap").addEventListener("wheel", (e) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); setZoom(S.zoom + (e.deltaY < 0 ? 0.25 : -0.25)); }, { passive: false });
+
+/* ---------------------------------------------------------------- controls */
+$("mirror").addEventListener("change", (e) => { S.mirror = e.target.checked; render(); });
+$("vEdit").addEventListener("click", () => { S.view = "edit"; $("vEdit").setAttribute("aria-pressed", "true"); $("vCoco").setAttribute("aria-pressed", "false"); render(); });
+$("vCoco").addEventListener("click", () => { S.view = "coco"; $("vCoco").setAttribute("aria-pressed", "true"); $("vEdit").setAttribute("aria-pressed", "false"); render(); });
+$("undo").addEventListener("click", undo); $("redo").addEventListener("click", redo);
+$("lvlName").addEventListener("change", (e) => { lvl().name = e.target.value.trim() || "Level"; changed(); });
+$("projName").addEventListener("change", (e) => { S.project.name = e.target.value.trim() || "Untitled project"; setDirty(true); renderFields(); });
+$("btnResize").addEventListener("click", () => {
+  const l = lvl(), w = Math.max(8, Math.min(32, Number($("lvlW").value) || l.w)), h = Math.max(8, Math.min(30, Number($("lvlH").value) || l.h));
+  snapshot();
+  const n = blankLevel(0, w, h);
+  for (let y = 0; y < Math.min(h, l.h); y++) for (let x = 0; x < Math.min(w, l.w); x++) { setC(n, x, y, getC(l, x, y)); setCol(n, x, y, l.colors[y][x]); }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if ((x === 0 || y === 0 || x === w - 1 || y === h - 1) && getC(n, x, y) !== "T") setC(n, x, y, "#");
+  n.name = l.name; n.wallColor = l.wallColor; S.project.levels[S.cur] = n; changed();
+});
+$("btnAddLvl").addEventListener("click", () => { S.project.levels.splice(S.cur + 1, 0, blankLevel(S.project.levels.length + 1)); S.cur++; S.undo = []; S.redo = []; changed(); });
+$("btnDupLvl").addEventListener("click", () => { const c = JSON.parse(JSON.stringify(lvl())); c.name += " copy"; S.project.levels.splice(S.cur + 1, 0, c); S.cur++; S.undo = []; S.redo = []; changed(); });
+$("btnDelLvl").addEventListener("click", () => { $("delConfirm").hidden = false; });
+$("delNo").addEventListener("click", () => { $("delConfirm").hidden = true; });
+$("delYes").addEventListener("click", () => {
+  $("delConfirm").hidden = true; if (S.project.levels.length < 2) return;
+  S.project.levels.splice(S.cur, 1); S.cur = Math.max(0, S.cur - 1); S.undo = []; S.redo = []; changed();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.target.matches("input, textarea, select")) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  const key = e.key.toLowerCase();
+  const t = TOOLS.find((t) => t.key === key); if (t) { S.tool = t.id; renderTools(); }
+  const br = BRUSHES.find((b) => b.key === key); if (br && !e.ctrlKey && !e.metaKey) { S.brush = br.id; renderTools(); }
+  if (e.key === "+" || e.key === "=") setZoom(S.zoom + 0.25);
+  if (e.key === "-") setZoom(S.zoom - 0.25);
+});
+
+/* ---------------------------------------------------------------- open / save */
+function loadProjectObject(obj, id) {
+  if (!obj || obj.format !== "pacfan-project" || !Array.isArray(obj.levels) || !obj.levels.length) throw new Error("That file isn't a Pac-Fan project.");
+  S.project = { format: "pacfan-project", version: 1, name: obj.name || "Untitled project", levels: obj.levels.map(normLevel) };
+  S.cur = 0; S.undo = []; S.redo = []; S.projectId = id || null; setDirty(!id); refreshAll();
+}
+function openFile(file) {
+  const r = new FileReader();
+  r.onload = () => { try { loadProjectObject(JSON.parse(r.result), null); toast("Opened " + file.name); } catch (err) { toast(err.message || "Couldn't read that file."); } };
+  r.readAsText(file);
+}
+$("btnOpen").addEventListener("click", () => $("fileIn").click());
+$("fileIn").addEventListener("change", (e) => { if (e.target.files[0]) openFile(e.target.files[0]); e.target.value = ""; });
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth++; $("dropcover").hidden = false; } });
+window.addEventListener("dragleave", (e) => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $("dropcover").hidden = true; } });
+window.addEventListener("dragover", (e) => { if ([...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
+window.addEventListener("drop", (e) => {
+  if (!e.dataTransfer.files.length) return; e.preventDefault(); dragDepth = 0; $("dropcover").hidden = true;
+  openFile(e.dataTransfer.files[0]);
+});
+$("btnNew").addEventListener("click", () => {
+  S.project = { format: "pacfan-project", version: 1, name: "New project", levels: [blankLevel(1)] };
+  S.cur = 0; S.projectId = null; S.undo = []; S.redo = []; setDirty(true); refreshAll(); toast("New project: draw level 1");
+});
+$("btnCopy").addEventListener("click", () => {
+  const txt = JSON.stringify(S.project, null, 1);
+  navigator.clipboard.writeText(txt).then(() => toast("Project JSON copied")).catch(() => { $("jsonOut").select(); toast("Select-all done: press Ctrl+C to copy"); });
+});
+function fileName() { return (S.project.name || "pacfan-project").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() + ".pacfan.json"; }
+$("btnSaveFile").addEventListener("click", async () => {
+  if (!S.downloads) { $("jsonOut").select(); toast("File saving isn't available here: copy the JSON instead"); return; }
+  try { await S.downloads.save({ filename: fileName(), data: JSON.stringify(S.project, null, 1) }); toast("Saved " + fileName()); }
+  catch (err) { if (err && err.code === "declined") return; toast(err && err.code === "rate_limited" ? "A save prompt is already open" : "Couldn't save the file"); }
+});
+
+/* ---------------------------------------------------------------- library (db) */
+function renderLib() {
+  const box = $("lib"); box.textContent = "";
+  if (!S.db) { const s = document.createElement("span"); s.className = "status"; s.style.whiteSpace = "normal"; s.textContent = "The library isn't available in this view. Use Save file."; box.append(s); $("btnSaveLib").disabled = true; return; }
+  if (!S.libDocs.length) { const s = document.createElement("span"); s.className = "status"; s.style.whiteSpace = "normal"; s.textContent = "No saved projects yet. Save to library keeps this project here, where Claude can read it to build the levels."; box.append(s); return; }
+  for (const d of S.libDocs) {
+    const v = d.data(); const row = document.createElement("div"); row.className = "libitem";
+    const n = document.createElement("div"); n.className = "n"; n.textContent = v.name || "Untitled";
+    const sm = document.createElement("small"); sm.textContent = (v.levelCount || 0) + " level" + (v.levelCount === 1 ? "" : "s") + " · " + (v.updated ? new Date(v.updated).toLocaleString() : ""); n.append(sm);
+    const b = document.createElement("button"); b.type = "button"; b.textContent = d.id === S.projectId ? "Open (current)" : "Open";
+    b.addEventListener("click", () => { try { loadProjectObject(v.project, d.id); toast("Opened " + (v.name || "project")); } catch (err) { toast(err.message); } });
+    row.append(n, b); box.append(row);
+  }
+}
+$("btnSaveLib").addEventListener("click", async () => {
+  if (!S.db) return;
+  const btn = $("btnSaveLib"); btn.disabled = true;
+  try {
+    const ref = S.projectId ? S.db.collection("projects").doc(S.projectId) : S.db.collection("projects").doc();
+    await ref.set({ name: S.project.name, updated: Date.now(), levelCount: S.project.levels.length, project: JSON.parse(JSON.stringify(S.project)) });
+    S.projectId = ref.id; setDirty(false); renderLib(); toast("Saved to library: Claude can read it from here");
+  } catch (err) {
+    toast(err && err.code === "invalid_argument" ? "You can view this library but not save to it" : err && err.code === "quota_exceeded" ? "The library is full: delete an old project first" : "Couldn't save: try again");
+  } finally { btn.disabled = false; }
+});
+
+/* ---------------------------------------------------------------- start */
+(function start() {
+  try {
+    const d = JSON.parse(localStorage.getItem("pacfan-draft") || "null");
+    if (d && d.project && d.project.format === "pacfan-project") { S.project = { ...d.project, levels: d.project.levels.map(normLevel) }; S.projectId = d.projectId || null; }
+  } catch (e) {}
+  refreshAll();
+  $("status").textContent = S.projectId ? "Saved to library" : "Example project";
+  requestAnimationFrame(() => $("zFit").click());
+  if (window.claude && window.claude.use) {
+    window.claude.use("downloads").then((d) => { S.downloads = d; }).catch(() => {});
+    window.claude.use("db").then((db) => {
+      S.db = db; renderLib(); if (!db) return;
+      $("btnSaveLib").disabled = false;
+      db.collection("projects").orderBy("updated", "desc").limit(50).onSnapshot(
+        (snap) => { S.libDocs = snap.docs; renderLib(); },
+        () => { S.libDocs = []; renderLib(); }
+      );
+    }).catch(() => { S.db = null; renderLib(); });
+  } else { renderLib(); }
+})();
+</script>
