@@ -28,7 +28,8 @@ E_SPD   equ     5               ; units per frame (an element costs 48, a row 32
 E_MODE  equ     6               ; ghosts: 0 chase 1 frightened 2 eyes
 E_REL   equ     7               ; dots to eat before a ghost leaves the house (0 = out)
 E_ID    equ     8               ; ghost number 0..3
-ESIZE   equ     9
+E_HOUSE equ     9               ; ghosts: 1 = in the house or on the way out through the door
+ESIZE   equ     10
 NENT    equ     5               ; player + 4 ghosts
 
 HCOST   equ     48
@@ -64,8 +65,12 @@ START   orcc    #$50            ; interrupts off for the whole game
         clr     HISC
         clr     HISC+1
         clr     HISC+2
+        clr     LEVEL
+        clr     STARTLV
 
-NEWGAME lbsr    SPLASH          ; the title: credits with the chase running through them
+NEWGAME lda     STARTLV         ; the title shows the level the last game started on
+        sta     LEVEL
+        lbsr    SPLASH          ; the title: credits with the chase running through them
         ldx     #TINIT
         ldu     #ENTS
         ldb     #NENT*ESIZE
@@ -80,6 +85,7 @@ WSPACE  lbsr    WAITVS
         lbsr    FLIP
         inc     FRAMES
         lbsr    CHKBRK
+        lbsr    TITLEKEYS       ; up/down: pick the starting level
         lbsr    TITLEANIM
         lbsr    RENDER
         lda     #$7F            ; SPACE: column 7, row 3
@@ -89,6 +95,8 @@ WSPACE  lbsr    WAITVS
         bne     WSPACE
         lda     #$FF
         sta     $FF02
+        lda     LEVEL
+        sta     STARTLV
         clr     SCORE
         clr     SCORE+1
         clr     SCORE+2
@@ -157,7 +165,13 @@ FR1     lbsr    COLLIDE
         bhs     LC1
         inca
         sta     GSPD
-LC1     lbsr    NEWLEVEL
+LC1     lda     LEVEL           ; next maze; after the last, back to the first
+        inca
+        cmpa    #NLEV
+        blo     LC2
+        clra
+LC2     sta     LEVEL
+        lbsr    NEWLEVEL
         lbra    NEWLIFE
 
 DIED    lbsr    DEATHSND
@@ -175,20 +189,27 @@ DIED    lbsr    DEATHSND
 
 * ---------------------------------------------------------------- level / positions
 NEWLEVEL
-        ldx     #MAPINIT        ; fresh dots
-        ldu     #MAP
-        ldb     #240
-NL1     lda     ,x+
-        sta     ,u+
-        decb
-        bne     NL1
-        lda     #NDOTS
+        ldb     LEVEL           ; Y -> this level's header (gen.py, from the maze editor)
+        lda     #LHSZ
+        mul
+        addd    #LVTAB
+        tfr     d,y
+        sty     LVP
+        lda     H_WCOL,y
+        sta     WCOL
+        lda     H_DOTS,y
         sta     DOTS
+        ldd     H_EXITC,y
+        std     EXITC           ; EXITC, EXITR
+        lda     H_EXITY,y
+        sta     EXITY
+        ldd     H_HOMEC,y
+        std     HOMEC           ; HOMEC, HOMER
+        ldd     H_HOMEX,y
+        std     HOMEX           ; HOMEX, HOMEY
         clr     ELROY
-        ldu     #BGINIT         ; background, then both screens: stack blasts
-        ldx     #BG
-        lbsr    COPY3K
-        ldu     #BG
+        lbsr    BUILDBG         ; the map and the background copy, from the level's tiles
+        ldu     #BG             ; then both screens: stack blasts
         ldx     #BUF0
         lbsr    COPY3K
         ldu     #BG
@@ -218,6 +239,21 @@ RP2     sta     E_SPD,u
         bne     RP2
         adda    ELROY           ; red keeps its Elroy boost after a death
         sta     ENTS+ESIZE+E_SPD
+        ldy     LVP             ; this level's start positions
+        ldd     H_PX,y
+        std     ENTS+E_X        ; E_X, E_Y
+        ldd     H_RX,y
+        std     ENTS+ESIZE+E_X
+        lda     H_HY,y
+        sta     ENTS+2*ESIZE+E_Y
+        sta     ENTS+3*ESIZE+E_Y
+        sta     ENTS+4*ESIZE+E_Y
+        lda     H_PKX,y
+        sta     ENTS+2*ESIZE+E_X
+        lda     H_CYX,y
+        sta     ENTS+3*ESIZE+E_X
+        lda     H_ORX,y
+        sta     ENTS+4*ESIZE+E_X
         clr     STATE
         clr     FRIGHT
         clr     FRIGHT+1
@@ -274,6 +310,8 @@ EAT     ldu     #ENTS
         lda     ,x
         cmpa    #2
         blo     EATX
+        cmpa    #3
+        bhi     EATX
         clr     ,x
         cmpa    #3
         beq     EATP
@@ -318,13 +356,15 @@ MOVEGHOST
 MGREL   clr     E_REL,u
 MGW     rts
 MG0     lda     E_SPD,u
-        ldb     E_Y,u           ; in the tunnel (middle row, outer two tiles each side)
-        cmpb    #48             ; ghosts move at half speed, as in the arcade
-        bne     MG0A
-        ldb     E_X,u
-        cmpb    #8
+        ldb     E_X,u           ; in a tunnel (between an edge tile and its neighbour --
+        cmpb    #4              ; only a tunnel opens there) ghosts move at half speed,
+        blo     MG0T            ; as in the arcade
+        cmpb    #56
+        bhi     MG0T
+        ldb     E_Y,u
+        cmpb    #12
         blo     MG0T
-        cmpb    #52
+        cmpb    #84
         bls     MG0A
 MG0T    lsra
 MG0A    adda    E_ACC,u
@@ -334,18 +374,29 @@ MG1     lbsr    COST
         bhi     MGX
         lbsr    ALIGNED
         bne     MG3
-        lda     E_MODE,u        ; eyes home again?
+        lda     E_MODE,u        ; eyes home again? then a ghost, leaving by the door
         cmpa    #2
-        bne     MG2
+        bne     MGH
         lda     E_X,u
-        cmpa    #28
+        cmpa    HOMEX
         bne     MG2
         lda     E_Y,u
-        cmpa    #48
+        cmpa    HOMEY
         bne     MG2
-        clr     E_MODE,u
+MGREV   clr     E_MODE,u        ; (label: test hook, eyes revived)
+        lda     #1
+        sta     E_HOUSE,u
+        lda     #2              ; facing up, towards the door
+        sta     E_DIR,u
         lbsr    SPDFOR
         sta     E_SPD,u
+        bra     MG2
+MGH     tst     E_HOUSE,u       ; through the door and out: an ordinary ghost again
+        beq     MG2
+        lda     E_Y,u
+        cmpa    EXITY
+        bne     MG2
+MGOUT   clr     E_HOUSE,u       ; (label: test hook, out of the house)
 MG2     lbsr    CHOOSE
 MG3     lbsr    COST
         nega
@@ -366,20 +417,28 @@ SP1     rts
 * next tile is nearest the target by straight-line distance squared; ties go up, left,
 * down, right. Frightened ghosts pick at random (then up, left, down, right).
 * Every loop count lives in memory: OPEN clobbers A, B and X.
-CHOOSE  lda     E_MODE,u
+CHOOSE  lda     E_MODE,u        ; eyes: follow the level's way-home map (gen.py)
+        cmpa    #2
+        bne     CHN0
+        lbsr    HOMEDIR
+        sta     E_DIR,u
+        rts
+CHN0    tst     E_HOUSE,u       ; leaving the house: straight for the door, even when blue
+        bne     CH0
+        lda     E_MODE,u
         cmpa    #1
         bne     CH0
         lbsr    RANDOM          ; frightened
         anda    #3
         sta     TRY
-        bsr     CHOK
+        lbsr    CHOK
         beq     CHTAKE
         clr     CHN
 CHF1    ldx     #ORDER
         ldb     CHN
         lda     b,x
         sta     TRY
-        bsr     CHOK
+        lbsr    CHOK
         beq     CHTAKE
         inc     CHN
         lda     CHN
@@ -396,7 +455,7 @@ CH1     ldx     #ORDER
         ldb     CHN
         lda     b,x
         sta     TRY
-        bsr     CHOK
+        lbsr    CHOK
         bne     CH2
         lbsr    DIST2           ; D = squared distance from the next tile
         cmpd    BESTD
@@ -420,6 +479,35 @@ CHREV   lda     E_DIR,u         ; dead end: turn round
         eora    #1
         sta     E_DIR,u
         rts
+* HOMEDIR: A = the way home (0 R, 1 L, 2 U, 3 D) from ghost U's tile: the level's map,
+* four 2-bit entries a byte, lowest bits first
+HOMEDIR lda     E_X,u
+        lsra
+        lsra
+        sta     TMP
+        ldx     #YTILE
+        ldb     E_Y,u
+        lda     b,x
+        ldb     #16
+        mul                     ; B = row * 16
+        addb    TMP
+        stb     TIDX
+        lsrb
+        lsrb
+        ldx     LVP
+        ldx     H_HOMED,x
+        abx
+        lda     ,x
+        ldb     TIDX
+        andb    #3
+        beq     HD2
+HD1     lsra
+        lsra
+        decb
+        bne     HD1
+HD2     anda    #3
+        rts
+
 * CHOK: Z when direction TRY is open and is not a reversal
 CHOK    lda     TRY
         eora    #1
@@ -431,7 +519,7 @@ CK9     lda     #1
         rts
 
 * TARGET: TX, TY for ghost U.
-*   eyes        the house door tile
+*   eyes        the house tile under the door; leaving the house: the tile above it
 *   scatter     each ghost's own corner (outside the maze, as in the arcade)
 *   chase  red     the player's tile
 *          pink    four tiles ahead of the player (facing up: also four left -- the
@@ -441,9 +529,12 @@ CK9     lda     #1
 * Red in "Elroy" mode chases even during scatter.
 TARGET  lda     E_MODE,u
         cmpa    #2
-        bne     TG0
-        lda     #7
-        ldb     #7
+        bne     TG00
+        ldd     HOMEC           ; eyes: the house tile under the door
+        lbra    TGS
+TG00    tst     E_HOUSE,u
+        beq     TG0
+        ldd     EXITC           ; leaving: the tile above the door
         lbra    TGS
 TG0     lbsr    PACTILE         ; PX, PY
         lda     GMODE
@@ -567,28 +658,47 @@ AH3     tfr     a,b
         lda     AHX
         rts
 
-* DIST2: D = (next col - TX)^2 + (next row - TY)^2 for direction TRY (tunnel-aware)
-DIST2   ldx     #YTILE          ; next row first: the tunnel test needs it
+* DIST2: D = (next col - TX)^2 + (next row - TY)^2 for direction TRY. Tunnel-aware: on a
+* row whose edge is open the short way across may be through the tunnel (16 columns
+* round), and likewise down a column whose top edge is open (15 rows round), so ghosts
+* follow the player through tunnels (the arcade measures straight).
+DIST2   ldx     #YTILE
         ldb     E_Y,u
         lda     b,x
         ldx     #DY1
         ldb     TRY
         adda    b,x
-        sta     NROW
+        bpl     DS0
+        lda     #14             ; up from row 0: row 14
+DS0     cmpa    #15
+        blo     DS0A
+        clra                    ; down from row 14: row 0
+DS0A    sta     NROW
         lda     E_X,u
         lsra
         lsra
         ldx     #DX1
         ldb     TRY
         adda    b,x
+        anda    #15
+        sta     NCOL
         suba    TX
         bpl     DS1
         nega
-DS1     ldb     NROW            ; on the tunnel row the short way may be through the
-        cmpb    #7              ; tunnel: use min(dx, 16 - dx) so ghosts follow the
-        bne     DS1A            ; player through it (the arcade measures straight)
-        cmpa    #8
+DS1     cmpa    #8              ; dx 9..15: through a tunnel may be shorter
         bls     DS1A
+        cmpa    #16
+        bhs     DS1A
+        sta     DXY
+        ldb     NROW
+        lda     #16
+        mul
+        ldx     #MAP
+        abx
+        lda     ,x              ; this row's column 0: open means a tunnel
+        cmpa    #1
+        lda     DXY
+        beq     DS1A
         nega
         adda    #16
 DS1A    tfr     a,b
@@ -598,7 +708,20 @@ DS1A    tfr     a,b
         suba    TY
         bpl     DS2
         nega
-DS2     tfr     a,b
+DS2     cmpa    #7              ; dy 8..14: through a tunnel may be shorter
+        bls     DS2A
+        cmpa    #15
+        bhs     DS2A
+        sta     DXY
+        ldx     #MAP
+        ldb     NCOL
+        lda     b,x             ; this column's row 0: open means a tunnel
+        cmpa    #1
+        lda     DXY
+        beq     DS2A
+        nega
+        adda    #15
+DS2A    tfr     a,b
         mul
         addd    ROFF
         rts
@@ -627,7 +750,7 @@ MODETICK
         ldb     #4
 MT1     lda     E_MODE,u
         bne     MT2
-        tst     E_REL,u
+        tst     E_HOUSE,u
         bne     MT2
         lda     E_DIR,u
         eora    #1
@@ -649,6 +772,8 @@ SC1     lda     E_MODE,u
         sta     E_MODE,u
         lda     #10             ; arcade: blue ghosts at half speed
         sta     E_SPD,u
+        tst     E_HOUSE,u       ; not in the house: they would turn back from the door
+        bne     SC2
         lda     E_DIR,u
         eora    #1
         sta     E_DIR,u
@@ -733,7 +858,8 @@ ALIGNED lda     E_X,u
         lda     b,x
 AL1     rts
 
-* OPEN: Z set when the tile next to the entity in direction A is not a wall.
+* OPEN: Z set when the tile next to the entity in direction A is open. Both axes wrap
+* (tunnels). The house door is open only to ghosts leaving the house and to eyes.
 * Clobbers A, B, X -- callers must not keep a loop count in B (that hung frightened
 * ghosts in dead ends, found from a user's snapshot)
 OPEN    pshs    a
@@ -743,24 +869,36 @@ OPEN    pshs    a
         ldx     #DX1
         ldb     ,s
         adda    b,x
-        anda    #15             ; column -1 and 16 wrap through the tunnel
+        anda    #15             ; column -1 and 16 wrap through a tunnel
         sta     TMP             ; next column
         ldx     #YTILE
         ldb     E_Y,u
         lda     b,x
         ldx     #DY1
         ldb     ,s+
-        adda    b,x             ; next row
-        ldb     #16
-        mul
+        adda    b,x             ; next row, wrapping -1 and 15 the same way
+        bpl     OP0
+        lda     #14
+OP0     cmpa    #15
+        blo     OP0A
+        clra
+OP0A    ldb     #16
+        mul                     ; row*16 fits in B
         addb    TMP
-        adca    #0
         ldx     #MAP
-        lda     d,x
+        abx
+        lda     ,x
         cmpa    #1
         beq     OP1
-        clra                    ; Z = open
+        cmpa    #4
+        beq     OPD
+OPZ     clra                    ; Z = open
         rts
+OPD     tst     E_HOUSE,u
+        bne     OPZ
+        lda     E_MODE,u
+        cmpa    #2
+        beq     OPZ
 OP1     lda     #1              ; NZ = wall
         rts
 
@@ -771,8 +909,13 @@ STEP    lda     E_DIR,u
         beq     ST1
         cmpa    #2
         beq     ST2
-        inc     E_Y,u
-        rts
+        inc     E_Y,u           ; off the bottom: come in at the top
+        lda     E_Y,u
+        cmpa    #90
+        bls     STDX
+STWD    lda     #6              ; (label: test hook, wrapped bottom to top)
+        sta     E_Y,u
+STDX    rts
 ST0     inc     E_X,u           ; off the right edge: come in at the left
         lda     E_X,u
         cmpa    #60
@@ -784,8 +927,13 @@ ST1     dec     E_X,u           ; off the left edge: come in at the right
         lda     #60
         sta     E_X,u
 ST1X    rts
-ST2     dec     E_Y,u
-        rts
+ST2     dec     E_Y,u           ; off the top: come in at the bottom
+        lda     E_Y,u
+        cmpa    #6
+        bhs     ST2X
+STWU    lda     #90             ; (label: test hook, wrapped top to bottom)
+        sta     E_Y,u
+ST2X    rts
 
 * TILEADDR: X -> map byte under entity U (aligned)
 TILEADDR
@@ -970,10 +1118,35 @@ HU1     lda     ,y
         leax    2,x
         dec     HCNT
         bne     HU1
+        lda     #GL_L           ; L and the level number
+        ldb     #CYANC
+        ldx     #20
+        lbsr    GLYPHAT
+        lbsr    LVDIG
+        pshs    b
+        ldb     #CYANC
+        ldx     #22
+        lbsr    GLYPHAT
+        puls    a
+        ldb     #CYANC
+        ldx     #24
+        lbsr    GLYPHAT
         lda     LIVES
         ldb     #YELLOWC
         ldx     #30
         lbra    GLYPHAT
+
+* LVDIG: A = tens, B = units of the level number shown (LEVEL + 1)
+LVDIG   lda     LEVEL
+        inca
+        clrb
+LVD1    cmpa    #10
+        blo     LVD2
+        suba    #10
+        incb
+        bra     LVD1
+LVD2    exg     a,b
+        rts
 
 * MSG: text X (glyph indices, $FF ends) in colour A, centred on the open row above the player
 MSG     sta     MCOL
@@ -1313,7 +1486,121 @@ SPLASH  lbsr    FILL3
         ldx     #TSPACE
         lda     #YELLOWC
         ldb     #83
-        lbra    PRINTC
+        lbsr    PRINTC
+        ldx     #TLEVEL
+        lda     #WHITEC
+        ldb     #76
+        lbsr    PRINTC
+        clr     TKPREV
+        lbra    SHOWLV
+
+* TITLEKEYS: on the title, UP and DOWN step the starting level (one step a press)
+TITLEKEYS
+        clr     TK
+        lda     #$F7            ; up: column 3, row 3
+        sta     $FF02
+        lda     $FF00
+        bita    #$08
+        bne     TK1
+        lda     #1
+        sta     TK
+TK1     lda     #$EF            ; down: column 4, row 3
+        sta     $FF02
+        lda     $FF00
+        bita    #$08
+        bne     TK2
+        lda     #2
+        sta     TK
+TK2     lda     #$FF
+        sta     $FF02
+        lda     TK
+        cmpa    TKPREV
+        beq     TKX
+        sta     TKPREV
+        cmpa    #1
+        beq     TKUP
+        cmpa    #2
+        bne     TKX
+        lda     LEVEL
+        bne     TKD1
+        lda     #NLEV
+TKD1    deca
+        sta     LEVEL
+        bra     SHOWLV
+TKUP    lda     LEVEL
+        inca
+        cmpa    #NLEV
+        blo     TKU1
+        clra
+TKU1    sta     LEVEL
+* SHOWLV: the two digits of "LEVEL nn" on the title
+SHOWLV  lbsr    LVDIG
+        pshs    b
+        ldb     #WHITEC
+        ldx     #76*32+20
+        lbsr    GLYPHAT
+        puls    a
+        ldb     #WHITEC
+        ldx     #76*32+22
+        lbra    GLYPHAT
+TKX     rts
+
+* BUILDBG: fill MAP and the background copy from this level's draw codes (gen.py): per
+* tile, MAP gets the logic code and the background two bytes x six rows of pattern in the
+* code's colour (0 in PCOLT = the level's wall colour). The HUD rows start black.
+BUILDBG ldx     #BG
+        ldd     #$8080
+BB0     std     ,x++
+        cmpx    #BG+192
+        blo     BB0
+        ldy     LVP
+        ldy     ,y              ; the level's 240 draw codes
+        ldu     #MAP
+        ldx     #BG+192
+        stx     SCRP
+        lda     #15
+        sta     BROW
+BB1     lda     #16
+        sta     BCOL
+BB2     ldb     ,y+
+        stb     TIDX
+        ldx     #LOGIC
+        lda     b,x
+        sta     ,u+
+        ldx     #PCOLT
+        lda     b,x
+        bne     BB3
+        lda     WCOL
+BB3     sta     GCOL
+        lda     TIDX
+        ldb     #12
+        mul
+        addd    #PATS
+        pshs    u,y
+        tfr     d,y
+        ldx     SCRP
+        ldb     #6
+BB4     lda     ,y+
+        ora     GCOL
+        sta     ,x
+        lda     ,y+
+        ora     GCOL
+        sta     1,x
+        leax    32,x
+        decb
+        bne     BB4
+        puls    u,y
+        ldx     SCRP
+        leax    2,x
+        stx     SCRP
+        dec     BCOL
+        bne     BB2
+        ldx     SCRP            ; 16 tiles took it 32 bytes on; the next tile row is 192
+        leax    5*32,x
+        stx     SCRP
+        dec     BROW
+        bne     BB1
+        rts
 
 * FILL3: clear both screens and the background copy ($0E00-$31FF) to black
 FILL3   ldx     #BUF0
@@ -1426,17 +1713,35 @@ YMOD
         fcb     0,1,2,3,4,5,0,1,2,3,4,5,0,1,2,3,4,5,0,1,2,3,4,5
 
 * title chase positions (element row 30 of the title, all heading left, ghosts behind)
-TINIT   fcb     20,30,1,1,0,0,0,0,0
-        fcb     30,30,1,1,0,0,0,0,0
-        fcb     36,30,1,1,0,0,0,0,1
-        fcb     42,30,1,1,0,0,0,0,2
-        fcb     48,30,1,1,0,0,0,0,3
-* start positions: x, y, dir, want, acc, speed, mode, release, id
-EINIT   fcb     28,84,1,1,0,16,0,0,0            ; player, bottom middle
-        fcb     24,48,1,1,0,15,0,0,0            ; red: out at once
-        fcb     28,48,2,2,0,15,0,0,1            ; pink: leaves at once
-        fcb     32,48,2,2,0,15,0,30,2           ; cyan: after 30 dots
-        fcb     36,48,0,0,0,15,0,60,3           ; orange: after 60 dots
+TINIT   fcb     20,30,1,1,0,0,0,0,0,0
+        fcb     30,30,1,1,0,0,0,0,0,0
+        fcb     36,30,1,1,0,0,0,0,1,0
+        fcb     42,30,1,1,0,0,0,0,2,0
+        fcb     48,30,1,1,0,0,0,0,3,0
+* start state: x, y, dir, want, acc, speed, mode, release, id, house. Positions are
+* overwritten per level from its header (RESETPOS): the player, red above the house door,
+* the other three inside the house.
+EINIT   fcb     0,0,1,1,0,16,0,0,0,0            ; player
+        fcb     0,0,1,1,0,15,0,0,0,0            ; red: out at once
+        fcb     0,0,2,2,0,15,0,0,1,1            ; pink: leaves at once
+        fcb     0,0,2,2,0,15,0,30,2,1           ; cyan: after 30 dots
+        fcb     0,0,0,0,0,15,0,60,3,1           ; orange: after 60 dots
+
+* level header offsets (LVTAB, LHSZ bytes a level)
+H_DATA  equ     0
+H_WCOL  equ     2
+H_DOTS  equ     3
+H_PX    equ     4
+H_RX    equ     6
+H_HY    equ     8
+H_PKX   equ     9
+H_CYX   equ     10
+H_ORX   equ     11
+H_EXITC equ     12              ; EXITC, EXITR
+H_EXITY equ     14
+H_HOMEC equ     15              ; HOMEC, HOMER
+H_HOMEX equ     17              ; HOMEX, HOMEY
+H_HOMED equ     19              ; -> the eyes' way-home map, 60 bytes
 
 WHITEC  equ     $C0             ; colour 4 (buff) | graphics bit
 YELLOWC equ     $90
@@ -1508,8 +1813,30 @@ HCNT    rmb     1
 ADDM    rmb     1
 ADDL    rmb     1
 DACV    rmb     1
+LEVEL   rmb     1
+STARTLV rmb     1
+LVP     rmb     2
+WCOL    rmb     1
+EXITC   rmb     1
+EXITR   rmb     1
+EXITY   rmb     1
+HOMEC   rmb     1
+HOMER   rmb     1
+HOMEX   rmb     1
+HOMEY   rmb     1
+NCOL    rmb     1
+DXY     rmb     1
+SCRP    rmb     2
+BROW    rmb     1
+BCOL    rmb     1
+TIDX    rmb     1
+TK      rmb     1
+TKPREV  rmb     1
 ENDVARS
 
+        if      LHSZ-21
+        error   "level header size disagrees with gen.py"
+        endc
         if      ENDVARS>$7000
         error   "program runs into the stack area"
         endc

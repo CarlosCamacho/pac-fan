@@ -4,19 +4,28 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
 (CAMCO). An unofficial fan game; not affiliated with or endorsed by the owners of Pac-Man.
 
     LOADM"PACFAN":EXEC      arrow keys move, SPACE starts, BREAK returns to BASIC
+                            on the title, UP/DOWN pick the starting level (1-25)
 
 Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
 
-- 16x15-tile maze, 118 dots, 4 power pellets, 3 lives, score, READY!/GAME OVER.
-- Tunnels at both ends of the middle row: leave on one side, come back on the other.
-  Ghosts use them too, slowing to half speed inside as in the arcade; on the tunnel row
-  their distance check counts the way through the tunnel, so they follow the player
-  through it (the arcade measures in a straight line, which in a 16-tile maze meant the
-  ghosts never chose the tunnel).
+- 25 levels, designed in the maze editor (`editor/maze-editor.html`) and read from
+  `levels/pacfan-project.json` at build time. Each has its own wall colour; walls are
+  joined lines (`#`) or solid blocks (`B`). Clearing a level goes to the next; after 25,
+  back to 1, with the ghosts a little faster each time. The level number is in the
+  score bar (L01..L25) and on the title.
+- Ghost house with a door: red starts above the door, the others inside; they leave
+  through the door (by dot count), and eaten ghosts' eyes go back in through it. The
+  player can never pass the door.
+- Tunnels, horizontal and vertical: an open edge tile wraps to the opposite edge, on
+  any row or column. Ghosts use them too, slowing to half speed inside as in the
+  arcade, and their distance check counts the way through a tunnel, so they follow the
+  player through it (the arcade measures in a straight line, which in a 16-tile maze
+  meant the ghosts never chose the tunnel).
+- Eyes go home by a shortest-path map gen.py computes per level (60 bytes a level),
+  not by straight-line targeting, which in a soak circled forever under a house walled
+  off from below.
 - Title screen: the credits, PRESS SPACE, and the player and the ghosts chasing across
   the middle; every five seconds the ghosts turn blue and the chase runs the other way.
-- Maze: the generator checks it has no dead ends and no unreachable tiles; the bottom
-  half was redesigned so no row is one long straight.
 - "Wa-ka" eat sound: alternate falling and rising sweeps, played in the time each frame
   would otherwise spend waiting for vertical sync, so it can never make a frame late.
 - Splash screen: CAMCO PRESENTS, the cast, PROGRAMMING BY CARLOS A. CAMACHO,
@@ -32,8 +41,8 @@ Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
 - Music: a sawtooth engine, two voices through the 6-bit DAC at 11,328 Hz (a 79-cycle
   sample loop, measured), blocking, used on the splash and before the first life.
 
-Technique: everything shape-related is a table built by `gen.py` (background screen,
-maze map, sprites pre-shifted for both element positions in a byte with AND/OR masks that
+Technique: everything shape-related is a table built by `gen.py` (per-level tile codes
+and wall patterns, from which the background screen is built at each level start; sprites pre-shifted for both element positions in a byte with AND/OR masks that
 keep SG12's one-colour-per-byte rule, font, the unrolled draw and restore code). Level
 redraws are stack blasts (PULU/PSHS D,X,Y). Each frame restores only the sprites' 3x6-byte
 squares from a background copy and redraws them, double-buffered and flipped at field sync.
@@ -47,6 +56,19 @@ Build: `LWASM=/path/to/lwasm ./build.sh` → `dist/PACFAN.DSK`.
 
 ## Levels and the maze editor
 
-`editor/maze-editor.html` is the browser maze editor (open it locally, or use the
-published copy). `levels/pacfan-project.json` is the 25-level project made with it; the
-game does not read it yet — building those levels into the engine is in progress.
+`editor/maze-editor.html` is the browser maze editor: open it in any browser. Save file
+downloads the project JSON; the shared library works only in the published copy.
+
+To change the levels, save the project over `levels/pacfan-project.json` and run
+`./build.sh`. `gen.py` reads that file (it never writes it) and prints a line per level.
+What the engine needs and checks:
+
+- 16x15 only (SG12 holds no more); one wall colour a level (per-wall colours are ignored).
+- A ghost house (`H`) with a door (`D`) directly above it and an open tile above the door.
+- A player start (`P`); without one, the open tile nearest the bottom middle.
+- Dots the player cannot reach are removed (otherwise the level could never be cleared),
+  and the line says so. If the ghosts' exit is cut off from the player, the line warns:
+  the ghosts can never reach the player on that level.
+
+Current warnings: levels 6, 9 and 10 are split in two -- the ghost house opens into a
+part of the maze the player cannot get to (64, 16 and 26 dots removed respectively).

@@ -5,101 +5,173 @@ SG12: 64x96 elements, 32 bytes a row, each byte two elements (left $0A, right $0
 both pairs written) and one colour: $80 | colour<<4 | bits.
 The maze is 16x15 tiles of 4x6 elements under a one-tile HUD; sprites are one tile.
 """
-MAZE = [
-    "################",
-    "#o.....##.....o#",
-    "#.##.#.##.#.##.#",
-    "#..............#",
-    "#.##.##..##.##.#",
-    "#....#....#....#",
-    "####.#.##.#.####",
-    " ......  ...... ",          # the tunnel row: both ends open
-    "####.#.##.#.####",
-    "#......##......#",
-    "#.#.##....##.#.#",
-    "#o..#..##..#..o#",
-    "#.#.#.####.#.#.#",
-    "#...#......#...#",
-    "################",
-]
-assert len(MAZE) == 15 and all(len(r) == 16 for r in MAZE)
+import json, os, sys
+LEVELS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "levels", "pacfan-project.json")
 GREEN, YELLOW, BLUE, RED, BUFF, CYAN, MAGENTA, ORANGE = range(8)
 TW, TH = 4, 6
+W, H = 16, 15
 
-def wall(c, r):
-    return 0 <= r < 15 and 0 <= c < 16 and MAZE[r][c] == "#"
+# ---- levels: read from the maze editor's project file (read only, never written)
+proj = json.load(open(LEVELS))
+assert proj.get("format") == "pacfan-project", "not a pacfan-project file"
+levels = proj["levels"]
+assert 1 <= len(levels) <= 99
 
-# reachability check from the player's start
-start = (7, 13)
-seen, todo = {start}, [start]
-while todo:
-    c, r = todo.pop()
-    for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        n = ((c + dc) % 16, r + dr)             # columns wrap through the tunnel
-        if 0 <= n[1] < 15 and not wall(*n) and n not in seen:
-            seen.add(n); todo.append(n)
-open_tiles = {(c, r) for r in range(15) for c in range(16) if not wall(c, r)}
-assert seen == open_tiles, "unreachable tiles: %s" % (open_tiles - seen)
-def nopen(c, r):
-    return sum(1 for dc, dr in ((1,0),(-1,0),(0,1),(0,-1))
-               if 0 <= r+dr < 15 and not wall((c+dc) % 16, r+dr))
-dead = [(c, r) for (c, r) in open_tiles if nopen(c, r) < 2]
-assert not dead, "dead ends: %s" % dead
-longest = 0
-for r in range(15):
-    run = 0
-    for c in range(16):
-        run = run + 1 if not wall(c, r) else 0
-        longest = max(longest, run)
-print("longest straight row run: %d tiles" % longest)
+# draw codes: 0-15 joined wall by neighbour mask (R1 L2 U4 D8), 16 solid block, 17 dot,
+# 18 power pill, 19 house door, 20 empty (house, tunnel, space)
+D_SOLID, D_DOT, D_PILL, D_DOOR, D_EMPTY = 16, 17, 18, 19, 20
+def cells_for(code):
+    if code < 16:
+        cells = {(1, 2), (2, 2), (1, 3), (2, 3)}
+        if code & 1: cells |= {(3, 2), (3, 3)}
+        if code & 2: cells |= {(0, 2), (0, 3)}
+        if code & 4: cells |= {(1, 0), (2, 0), (1, 1), (2, 1)}
+        if code & 8: cells |= {(1, 4), (2, 4), (1, 5), (2, 5)}
+        return cells
+    if code == D_SOLID: return {(x, y) for x in range(4) for y in range(6)}
+    if code == D_DOT: return {(1, 3), (2, 3)}
+    if code == D_PILL: return {(x, y) for x in (1, 2) for y in (1, 2, 3, 4)}
+    if code == D_DOOR: return {(x, 3) for x in range(4)}
+    return set()
+pats = bytearray()
+for code in range(21):
+    cells = cells_for(code)
+    for y in range(6):
+        for bx in (0, 2):
+            pats.append((0x0A if (bx, y) in cells else 0) | (0x05 if (bx + 1, y) in cells else 0))
+# logic map: 0 open, 1 wall, 2 dot, 3 pill, 4 door (ghosts only)
+LOGIC = [1] * 17 + [2, 3, 4, 0]
+# colour of each draw code: 0 = the level's wall colour
+PCOL = [0] * 17 + [0x80 | BUFF << 4, 0x80 | BUFF << 4, 0x80 | MAGENTA << 4, 0x80]
 
-# ---- element picture of the whole screen: (colour, lit) per element
-pic = [[None] * 64 for _ in range(96)]
-def put(ex, ey, col):
-    pic[ey][ex] = col
-for r in range(15):
-    for c in range(16):
-        ox, oy = c * TW, (r + 1) * TH
-        ch = MAZE[r][c]
-        if ch == "#":
-            cells = {(1, 2), (2, 2), (1, 3), (2, 3)}
-            if wall(c + 1, r): cells |= {(3, 2), (3, 3)}
-            if wall(c - 1, r): cells |= {(0, 2), (0, 3)}
-            if wall(c, r - 1): cells |= {(1, 0), (2, 0), (1, 1), (2, 1)}
-            if wall(c, r + 1): cells |= {(1, 4), (2, 4), (1, 5), (2, 5)}
-            for (x, y) in cells: put(ox + x, oy + y, BLUE)
-        elif ch == ".":
-            put(ox + 1, oy + 3, BUFF); put(ox + 2, oy + 3, BUFF)
-        elif ch == "o":
-            for y in (1, 2, 3, 4):
-                put(ox + 1, oy + y, BUFF); put(ox + 2, oy + y, BUFF)
+def solidish(rows, c, r):
+    return 0 <= r < H and 0 <= c < W and rows[r][c] in "#BD"
+def blocks(ch):
+    return ch in "#BD"
 
-def pair_byte(lcol, rcol):
-    if lcol is None and rcol is None:
-        return 0x80
-    col = lcol if lcol is not None else rcol
-    assert rcol is None or lcol is None or lcol == rcol, "pair rule"
-    return 0x80 | (col << 4) | (0x0A if lcol is not None else 0) | (0x05 if rcol is not None else 0)
+lvdata, headers, report, homes = [], [], [], []
+for li, lv in enumerate(levels):
+    name = lv.get("name", "Level %d" % (li + 1))
+    rows = [r.ljust(W)[:W] for r in lv["rows"]]
+    assert lv["w"] == W and lv["h"] == H and len(rows) == H, "%s: must be 16x15 (SG12 holds no more)" % name
+    notes = []
+    if any(ch != "-" for row in lv.get("colors", []) for ch in row):
+        notes.append("per-wall colours ignored (one wall colour a level)")
+    house = sorted((c, r) for r in range(H) for c in range(W) if rows[r][c] == "H")
+    doors = sorted((c, r) for r in range(H) for c in range(W) if rows[r][c] == "D")
+    assert house, "%s: no ghost house" % name
+    hy = house[0][1]
+    hx = min(c for c, r in house if r == hy)
+    hcols = [c for c, r in house if r == hy]
+    above = [(c, r) for c, r in doors if r == hy - 1 and c in hcols]
+    assert above, "%s: the engine wants the house door directly above the house" % name
+    dc = min(c for c, r in above)
+    er = hy - 2
+    assert rows[er][dc] not in "#BDH", "%s: the tile above the door must be open" % name
+    two = (dc + 1, hy - 1) in doors and rows[er][dc + 1] not in "#BDH"
+    ps = [(c, r) for r in range(H) for c in range(W) if rows[r][c] == "P"]
+    if ps:
+        pc, pr = ps[0]
+    else:                                   # no 'P': the open tile nearest bottom-middle
+        cand = [(abs(c - 7.5) + 2 * abs(r - 13), c, r) for r in range(H) for c in range(1, W - 1)
+                if rows[r][c] in ". o"]
+        _, pc, pr = min(cand)
+    assert not blocks(rows[pr][pc]) and rows[pr][pc] != "H", "%s: player start (%d,%d) is a wall" % (name, pc, pr)
+    # reachability for the player: both axes wrap (tunnels); doors and walls block
+    seen, todo = {(pc, pr)}, [(pc, pr)]
+    while todo:
+        c, r = todo.pop()
+        for dc_, dr_ in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = ((c + dc_) % W, (r + dr_) % H)
+            if not blocks(rows[n[1]][n[0]]) and rows[n[1]][n[0]] != "H" and n not in seen:
+                seen.add(n); todo.append(n)
+    rows = [list(r) for r in rows]
+    lost = [(c, r) for r in range(H) for c in range(W) if rows[r][c] in ".o" and (c, r) not in seen]
+    for c, r in lost:
+        rows[r][c] = " "
+    if (dc, er) not in seen:
+        notes.append("WARNING: the ghosts' exit (%d,%d) is cut off from the player" % (dc, er))
+    if lost:
+        notes.append("%d unreachable dot(s) removed: %s" % (len(lost), lost))
+    def nopen(c, r):
+        return sum(1 for a, b in ((1,0),(-1,0),(0,1),(0,-1)) if not blocks(rows[(r+b) % H][(c+a) % W])
+                   and rows[(r+b) % H][(c+a) % W] != "H")
+    dead = sorted((c, r) for (c, r) in seen if nopen(c, r) < 2)
+    if dead:
+        notes.append("dead ends at %s (play fine; ghosts turn round there)" % dead)
+    data = bytearray()
+    for r in range(H):
+        for c in range(W):
+            ch = rows[r][c]
+            if ch == "#":
+                m = (1 if solidish(rows, c + 1, r) else 0) | (2 if solidish(rows, c - 1, r) else 0) \
+                    | (4 if solidish(rows, c, r - 1) else 0) | (8 if solidish(rows, c, r + 1) else 0)
+                data.append(m)
+            elif ch == "B": data.append(D_SOLID)
+            elif ch == ".": data.append(D_DOT)
+            elif ch == "o": data.append(D_PILL)
+            elif ch == "D": data.append(D_DOOR)
+            else: data.append(D_EMPTY)          # ' ', 'H', 'T', 'P'
+    # eyes' way home: breadth-first from the house tile under the door, over every tile a
+    # ghost may cross (the door included; both axes wrap), each tile storing the direction
+    # (0 R, 1 L, 2 U, 3 D) of its neighbour one step nearer. Straight-line targeting looped
+    # forever under a house walled off from below (level 2, found in a soak).
+    home = (dc, hy)
+    dist = {home: 0}; q = [home]
+    for c, r in q:
+        for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = ((c + a) % W, (r + b) % H)
+            if rows[n[1]][n[0]] not in "#B" and n not in dist:
+                dist[n] = dist[(c, r)] + 1; q.append(n)
+    homed = []
+    for r in range(H):
+        for c in range(W):
+            best = 2
+            if (c, r) in dist and dist[(c, r)] > 0:
+                for d, (a, b) in ((2, (0, -1)), (1, (-1, 0)), (3, (0, 1)), (0, (1, 0))):   # ties U L D R
+                    n = ((c + a) % W, (r + b) % H)
+                    if dist.get(n, 999) == dist[(c, r)] - 1:
+                        best = d; break
+            homed.append(best)
+    packed = bytearray(sum(homed[i + k] << (2 * k) for k in range(4)) for i in range(0, 240, 4))
+    ndots = sum(1 for v in data if v in (D_DOT, D_PILL))
+    assert 0 < ndots < 256
+    wc = int(lv.get("wallColor", BLUE)) & 7
+    hdr = [0x80 | wc << 4, ndots,
+           pc * 4, pr * 6 + 6,                                   # player
+           dc * 4 + (2 if two else 0), er * 6 + 6,               # red, above the door
+           hy * 6 + 6, hx * 4,                                   # house row; pink
+           (hx + 1) * 4 if len(hcols) > 1 else hx * 4,           # cyan
+           hx * 4 + 2 if len(hcols) > 1 else hx * 4,             # orange
+           dc, er, er * 6 + 6,                                   # exit tile, its element row
+           dc, hy, dc * 4, hy * 6 + 6]                           # home tile (eyes), elements
+    assert rows[hy][dc] == "H", "%s: no house tile under the door" % name
+    lvdata.append(data); headers.append(hdr); homes.append(packed)
+    report.append("%-10s colour %d  %3d dots  %s" % (name, wc, ndots, "; ".join(notes) or "ok"))
 
-bg = bytearray()
-for y in range(96):
-    for b in range(32):
-        bg.append(pair_byte(pic[y][2 * b], pic[y][2 * b + 1]))
-assert len(bg) == 3072
-
-out = ["* generated by gen.py -- do not edit"]
+out = ["* generated by gen.py from levels/pacfan-project.json -- do not edit"]
 def fcb(label, data):
     out.append(label)
     for i in range(0, len(data), 16):
         out.append("        fcb     " + ",".join("$%02X" % v for v in data[i:i + 16]))
-
-mapb = bytearray()
-for r in range(15):
-    for c in range(16):
-        mapb.append({"#": 1, ".": 2, "o": 3, " ": 0}[MAZE[r][c]])
-fcb("MAPINIT", mapb)
-out.append("NDOTS   equ     %d" % sum(1 for v in mapb if v >= 2))
-fcb("BGINIT", bg)
+out.append("NLEV    equ     %d" % len(levels))
+out.append("LHSZ    equ     %d" % (4 + len(headers[0])))
+out.append("* level header: data, wall colour, dots, player x y, red x y, house y, pink x,")
+out.append("* cyan x, orange x, exit col row y, home col row x y")
+out.append("LVTAB")
+for i, h in enumerate(headers):
+    out.append("        fdb     LV%02d" % i)
+    out.append("        fcb     " + ",".join("$%02X" % v for v in h))
+    out.append("        fdb     HD%02d" % i)
+fcb("PATS", pats)
+fcb("LOGIC", LOGIC)
+fcb("PCOLT", PCOL)
+for i, d in enumerate(lvdata):
+    fcb("LV%02d" % i, d)
+for i, d in enumerate(homes):
+    fcb("HD%02d" % i, d)
+for line in report:
+    print(line)
 
 # ---- sprites: 4x6 elements -> two x-variants of 6 rows x 3 bytes, 18 AND then 18 OR
 def sprite(rows, col):
@@ -171,6 +243,7 @@ FONT = {
  ")": ["X..", ".X.", ".X.", ".X.", "X.."], "-": ["...", "...", "XXX", "...", "..."],
 }
 order = "0123456789RADYGMOV! EPSCBFHIJKLNQTUWXZ.()-"
+out.append("GL_L    equ     %d" % order.index("L"))
 font = bytearray()
 for ch in order:
     g = FONT[ch]
@@ -194,6 +267,7 @@ text("TPROG", "PROGRAMMING BY")
 text("TNAME1", "CARLOS A.")
 text("TNAME2", "CAMACHO")
 text("TCOPY", "(C) 2026 CAMCO")
+text("TLEVEL", "LEVEL 01")
 
 # ---- music: an original two-voice tune for the sawtooth engine (not from any game).
 # The engine runs one sample every SAMPCYC cycles; each record is a sample count, then
@@ -226,7 +300,7 @@ out.append("TUNE")
 for i in range(0, len(words), 12):
     out.append("        fdb     " + ",".join("$%04X" % w for w in words[i:i+12]))
 open("tables.inc", "w").write("\n".join(out) + "\n")
-print("tables.inc: %d dots, %d sprite bytes, %d font bytes" % (sum(1 for v in mapb if v >= 2), len(spr), len(font)))
+print("tables.inc: %d levels, %d sprite bytes, %d font bytes" % (len(levels), len(spr), len(font)))
 
 # ---- unrolled draw and restore
 d = ["* generated by gen.py -- do not edit",
