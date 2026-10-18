@@ -705,7 +705,16 @@ $("btnCopy").addEventListener("click", () => {
 });
 function fileName() { return (S.project.name || "pacfan-project").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() + ".pacfan.json"; }
 $("btnSaveFile").addEventListener("click", async () => {
-  if (!S.downloads) { $("jsonOut").select(); toast("File saving isn't available here: copy the JSON instead"); return; }
+  if (!S.downloads) {                       // opened as a plain file: an ordinary browser download
+    try {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(S.project, null, 1)], { type: "application/json" }));
+      const a = document.createElement("a"); a.href = url; a.download = fileName();
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("Saved " + fileName());
+    } catch (e) { $("jsonOut").select(); toast("File saving isn't available here: copy the JSON instead"); }
+    return;
+  }
   try { await S.downloads.save({ filename: fileName(), data: JSON.stringify(S.project, null, 1) }); toast("Saved " + fileName()); }
   catch (err) { if (err && err.code === "declined") return; toast(err && err.code === "rate_limited" ? "A save prompt is already open" : "Couldn't save the file"); }
 });
