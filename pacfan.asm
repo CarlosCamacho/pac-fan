@@ -102,8 +102,7 @@ WSPACE  lbsr    WAITVS
         clr     SCORE+2
         lda     #3
         sta     LIVES
-        lda     #15
-        sta     GSPD
+        clr     LAP             ; first time round the levels
         lbsr    NEWLEVEL
 
 * ---------------------------------------------------------------- one life
@@ -158,17 +157,14 @@ FR1     lbsr    COLLIDE
         beq     FRAME
         cmpa    #1
         beq     DIED
-* level clear: flash, faster ghosts, new maze
-        lbsr    PAUSE60
-        lda     GSPD
-        cmpa    #19
-        bhs     LC1
-        inca
-        sta     GSPD
+* level clear: flash, new maze (NEWLEVEL sets its ghost speed)
+LCLEAR  lbsr    PAUSE60         ; (label: test hook, level cleared)
 LC1     lda     LEVEL           ; next maze; after the last, back to the first
         inca
         cmpa    #NLEV
         blo     LC2
+        lda     #1              ; ...at full speed from then on
+        sta     LAP
         clra
 LC2     sta     LEVEL
         lbsr    NEWLEVEL
@@ -182,7 +178,7 @@ DIED    lbsr    WAITVS          ; show the frame where the player was caught
         lbsr    HUD
         lda     LIVES
         lbne    NEWLIFE
-        ldx     #TOVER
+GOVER   ldx     #TOVER          ; (label: test hook, game over)
         lda     #REDC
         lbsr    MSG
         lbsr    PAUSE60
@@ -191,6 +187,18 @@ DIED    lbsr    WAITVS          ; show the frame where the player was caught
 
 * ---------------------------------------------------------------- level / positions
 NEWLEVEL
+        lda     LEVEL           ; ghost speed by level: 15 for levels 1-8, then one more
+        lsra                    ; every eight levels, 19 for 33-40 (the player is 16);
+        lsra                    ; 19 for good once the game has gone round once
+        lsra
+        adda    #15
+        cmpa    #19
+        bls     NLS1
+        lda     #19
+NLS1    tst     LAP
+        beq     NLS2
+        lda     #19
+NLS2    sta     GSPD
         ldb     LEVEL           ; Y -> this level's header (gen.py, from the maze editor)
         lda     #LHSZ
         mul
@@ -1298,6 +1306,239 @@ SW2     subd    #1
         rts
 
 * ---------------------------------------------------------------- input
+        ifdef   BOT
+* ---- test build only (lwasm -DBOT=1): an autopilot in place of the keyboard, for
+* measuring level difficulty. At each tile it takes the first step of the shortest path
+* (both axes wrap) to the nearest dot or pill, treating every tile a live ghost is on or
+* next to, and the tile two ahead of it, as blocked. With no such path it steps to any
+* open tile that is not blocked. Ties between equal paths are broken at random.
+READKEYS
+        ldu     #ENTS
+        lbsr    ALIGNED
+        lbne    BKX
+        lbsr    PACTILE
+        lda     PY
+        ldb     #16
+        mul
+        addb    PX
+        stb     BSTART
+        ldx     #BFD            ; all unvisited
+        lda     #$FF
+        ldb     #240
+BK0     sta     ,x+
+        decb
+        bne     BK0
+        ldy     #ENTS+ESIZE     ; danger round every live (chasing) ghost
+        lda     #4
+        sta     BGN
+BK1     tst     E_MODE,y
+        lbne    BK3
+        lda     E_X,y
+        adda    #2
+        lsra
+        lsra
+        sta     BTMP
+        ldx     #YTILE
+        ldb     E_Y,y
+        addb    #3
+        abx
+        lda     ,x
+        ldb     #16
+        mul
+        addb    BTMP
+        stb     BGT
+        lbsr    BMARK
+        clr     BDIR
+BK2     ldb     BGT
+        lda     BDIR
+        lbsr    BNBR
+        lbsr    BMARK
+        lda     BDIR
+        cmpa    E_DIR,y         ; and two ahead in its direction
+        bne     BK2A
+        lda     BDIR
+        lbsr    BNBR
+        lbsr    BMARK
+BK2A    inc     BDIR
+        lda     BDIR
+        cmpa    #4
+        blo     BK2
+BK3     leay    ESIZE,y
+        dec     BGN
+        lbne    BK1
+        ldx     #BFD            ; the start
+        ldb     BSTART
+        lda     #4
+        abx
+        sta     ,x
+        clr     BQH
+        clr     BQT
+        lda     ENTS+E_DIR      ; on a tie keep going the same way (a random tie-break
+        sta     BD              ; on every tile made it dither between two dots), then
+        lbsr    BFIRST          ; the other ways in a per-game rotation (BSEED)
+        lda     BSEED
+        anda    #3
+        sta     BROT
+        clr     BDIR
+BK4     lda     BDIR
+        adda    BROT
+        anda    #3
+        sta     BD
+        lbsr    BFIRST
+BK5     inc     BDIR
+        lda     BDIR
+        cmpa    #4
+        blo     BK4
+        bra     BK6
+* BFIRST: the start's neighbour in direction BD, if open and unvisited, joins the queue
+BFIRST  ldb     BSTART
+        lda     BD
+        lbsr    BNBR
+        stb     BN
+        lbsr    BPASS
+        bne     BFX
+        ldx     #BFD
+        ldb     BN
+        abx
+        lda     ,x
+        cmpa    #$FF
+        bne     BFX
+        lda     BD
+        sta     ,x              ; X still -> BFD[BN]
+        lbra    BPUSH
+BFX     rts
+BK6     lda     BQH             ; breadth first
+        cmpa    BQT
+        beq     BKFLEE
+        ldx     #BQ
+        ldb     BQH
+        abx
+        ldb     ,x
+        stb     BCUR
+        inc     BQH
+        ldx     #MAP
+        abx
+        lda     ,x
+        cmpa    #2
+        blo     BK7
+        cmpa    #3
+        bhi     BK7
+        ldx     #BFD            ; a dot or pill: go its first step
+        abx
+        lda     ,x
+        sta     ENTS+E_WANT
+        rts
+BK7     clr     BDIR
+BK8     lda     BDIR
+        ldb     BCUR
+        lbsr    BNBR
+        stb     BN
+        lbsr    BPASS
+        bne     BK9
+        ldx     #BFD
+        ldb     BN
+        abx
+        lda     ,x
+        cmpa    #$FF
+        bne     BK9
+        ldx     #BFD            ; BFD[BN] = BFD[BCUR]: the same first step
+        ldb     BCUR
+        abx
+        lda     ,x
+        ldx     #BFD
+        ldb     BN
+        abx
+        sta     ,x
+        lbsr    BPUSH
+BK9     inc     BDIR
+        lda     BDIR
+        cmpa    #4
+        blo     BK8
+        bra     BK6
+BKFLEE  clr     BDIR            ; no safe path: any open, unblocked neighbour
+BKF1    lda     BDIR
+        ldb     BSTART
+        lbsr    BNBR
+        stb     BN
+        lbsr    BPASS
+        bne     BKF2
+        ldx     #BFD
+        ldb     BN
+        abx
+        lda     ,x
+        cmpa    #$FE
+        beq     BKF2
+        lda     BDIR
+        sta     ENTS+E_WANT
+        rts
+BKF2    inc     BDIR
+        lda     BDIR
+        cmpa    #4
+        blo     BKF1
+BKX     rts
+* BMARK: mark tile B blocked (not the player's own)
+BMARK   cmpb    BSTART
+        beq     BMX
+        ldx     #BFD
+        lda     #$FE
+        abx
+        sta     ,x
+BMX     rts
+* BPUSH: append BN to the queue
+BPUSH   ldx     #BQ
+        ldb     BQT
+        lda     BN
+        abx
+        sta     ,x
+        inc     BQT
+        rts
+* BPASS: Z when tile BN is open to the player (not wall, not door)
+BPASS   ldx     #MAP
+        ldb     BN
+        abx
+        lda     ,x
+        cmpa    #1
+        beq     BPN
+        cmpa    #4
+        beq     BPN
+        clra
+        rts
+BPN     lda     #1
+        rts
+* BNBR: B = the tile next to tile B in direction A (0 R 1 L 2 U 3 D), both axes wrapping
+BNBR    cmpa    #1
+        blo     BNR
+        beq     BNL
+        cmpa    #2
+        beq     BNU
+        cmpb    #224            ; down
+        bhs     BND1
+        addb    #16
+        rts
+BND1    subb    #224
+        rts
+BNU     cmpb    #16
+        blo     BNU1
+        subb    #16
+        rts
+BNU1    addb    #224
+        rts
+BNR     tfr     b,a
+        anda    #15
+        cmpa    #15
+        beq     BNR1
+        incb
+        rts
+BNR1    subb    #15
+        rts
+BNL     tfr     b,a
+        anda    #15
+        beq     BNL1
+        decb
+        rts
+BNL1    addb    #15
+        rts
+        else
 READKEYS
         ldu     #ENTS
         lda     #$F7            ; up: column 3
@@ -1321,6 +1562,7 @@ KEY     sta     $FF02
         bne     KY1
         stb     E_WANT,u
 KY1     rts
+        endc
 
 CHKBRK  lda     #$FB            ; BREAK: column 2, row 6
         sta     $FF02
@@ -1977,16 +2219,39 @@ TIDX    rmb     1
 TK      rmb     1
 TKPREV  rmb     1
 TILES   rmb     240
+LAP     rmb     1
 FLBUF   rmb     2
 FLN     rmb     1
 FLC     rmb     1
+        ifdef   BOT
+BFD     rmb     240
+BQ      rmb     240
+BSTART  rmb     1
+BGN     rmb     1
+BGT     rmb     1
+BTMP    rmb     1
+BDIR    rmb     1
+BD      rmb     1
+BN      rmb     1
+BCUR    rmb     1
+BQH     rmb     1
+BQT     rmb     1
+BROT    rmb     1
+BSEED   rmb     1
+        endc
 ENDVARS
 
         if      LHSZ-21
         error   "level header size disagrees with gen.py"
         endc
+        ifdef   BOT
+        if      ENDVARS>$7800           ; the test build may use more; it never ships
+        error   "bot build runs into the stack area"
+        endc
+        else
         if      ENDVARS>$7000
         error   "program runs into the stack area"
+        endc
         endc
 
         end     START

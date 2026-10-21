@@ -13,6 +13,11 @@ Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
   joined lines (`#`) or solid blocks (`B`). Clearing a level goes to the next; after the
   last, back to 1, with the ghosts a little faster each time. The level number is in the
   score bar (L01..L40) and on the title.
+- Ghost speed rises with the level number: 15 for levels 1-8, 16 for 9-16, 17 for 17-24,
+  18 for 25-32 and 19 for 33-40 (the player moves at 16). Starting on a later level from
+  the title starts at that level's speed. After level 40 the game goes round again at 19.
+- A test build with an autopilot (`lwasm -DBOT=1`, never shipped) plays the real game for
+  measuring level difficulty: shortest path to the nearest dot, avoiding live ghosts.
 - Ghost house with a door: red starts above the door, the others inside; they leave
   through the door (by dot count), and eaten ghosts' eyes go back in through it. The
   player can never pass the door.
