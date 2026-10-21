@@ -21,6 +21,9 @@ Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
   arcade, and their distance check counts the way through a tunnel, so they follow the
   player through it (the arcade measures in a straight line, which in a 16-tile maze
   meant the ghosts never chose the tunnel).
+- When the player is caught, every wall flashes through all eight colours (twice, about
+  1.5 s), then the maze returns to its own colour. Each colour is painted into the hidden
+  buffer and flipped in at field sync, so it never wipes down the screen.
 - Eyes go home by a shortest-path map gen.py computes per level (60 bytes a level),
   not by straight-line targeting, which in a soak circled forever under a house walled
   off from below.

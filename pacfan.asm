@@ -174,8 +174,10 @@ LC2     sta     LEVEL
         lbsr    NEWLEVEL
         lbra    NEWLIFE
 
-DIED    lbsr    DEATHSND
-        lbsr    PAUSE60
+DIED    lbsr    WAITVS          ; show the frame where the player was caught
+        lbsr    FLIP
+        lbsr    DEATHSND
+        lbsr    DEATHFLASH      ; the maze flashes through every colour
         dec     LIVES
         lbsr    HUD
         lda     LIVES
@@ -1396,6 +1398,81 @@ PA1     pshs    b
         bne     PA1
         rts
 
+* DEATHFLASH: every wall steps through all eight SG colours, twice, then goes back to the
+* level's colour. Recolouring takes about 1.7 frames, so it is done in the hidden buffer
+* and flipped in at field sync: done on the shown one it wiped down the screen.
+DEATHFLASH
+        ldu     #BUF0           ; copy the shown screen (not BACK) into BACK, so both
+        cmpu    BACK            ; buffers hold the moment of death
+        bne     DF0
+        ldu     #BUF1
+DF0     ldx     BACK
+        lbsr    COPY3K
+        lda     #16             ; 2 passes x 8 colours
+        sta     FLN
+DF1     ldx     BACK
+        stx     FLBUF
+        lda     FLN
+        anda    #7
+        asla
+        asla
+        asla
+        asla
+        ora     #$80            ; $80 | colour << 4
+        lbsr    WALLCOL
+        lbsr    WAITVS
+        lbsr    FLIP
+        ldb     #3              ; four frames a colour
+DF2     pshs    b
+        lbsr    WAITVS
+        puls    b
+        decb
+        bne     DF2
+        dec     FLN
+        bne     DF1
+        ldx     BACK            ; back to the level's colour: hidden one, flip, then the other
+        stx     FLBUF
+        lda     WCOL
+        lbsr    WALLCOL
+        lbsr    WAITVS
+        lbsr    FLIP
+        ldx     BACK
+        stx     FLBUF
+        lda     WCOL
+* WALLCOL: recolour every wall tile (MAP = 1) of the buffer at FLBUF to colour byte A
+WALLCOL sta     FLC
+        ldu     #MAP
+        ldx     FLBUF
+        leax    192,x           ; the maze starts below the score row
+        lda     #15
+        sta     BROW
+WC1     lda     #16
+        sta     BCOL
+WC2     lda     ,u+
+        cmpa    #1
+        bne     WC4
+        ldb     #6
+        pshs    x
+WC3     lda     ,x
+        anda    #$0F
+        ora     FLC
+        sta     ,x
+        lda     1,x
+        anda    #$0F
+        ora     FLC
+        sta     1,x
+        leax    32,x
+        decb
+        bne     WC3
+        puls    x
+WC4     leax    2,x
+        dec     BCOL
+        bne     WC2
+        leax    5*32,x
+        dec     BROW
+        bne     WC1
+        rts
+
 * SETF: SAM display offset F6-F0 = A (512-byte units)
 SETF    ldx     #$FFC6
         ldb     #7
@@ -1900,6 +1977,9 @@ TIDX    rmb     1
 TK      rmb     1
 TKPREV  rmb     1
 TILES   rmb     240
+FLBUF   rmb     2
+FLN     rmb     1
+FLC     rmb     1
 ENDVARS
 
         if      LHSZ-21
