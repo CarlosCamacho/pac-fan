@@ -1545,6 +1545,58 @@ SHOWLV  lbsr    LVDIG
         lbra    GLYPHAT
 TKX     rts
 
+* TCODE: B = draw code for the tile type at Y (in TILES; BCOL 16..1 and BROW 15..1 say
+* where it is): a wall line gets its join mask (R1 L2 U4 D8) from neighbouring walls,
+* blocks and doors, as gen.py does. Keeps Y.
+TCODE   lda     ,y
+        ldx     #TDC
+        ldb     a,x
+        cmpb    #$FF
+        bne     TCX
+        clrb
+        lda     BCOL
+        cmpa    #1              ; column 15: nothing to the right
+        beq     TC1
+        lda     1,y
+        bsr     ISW
+        bcc     TC1
+        orb     #1
+TC1     lda     BCOL
+        cmpa    #16             ; column 0
+        beq     TC2
+        lda     -1,y
+        bsr     ISW
+        bcc     TC2
+        orb     #2
+TC2     lda     BROW
+        cmpa    #15             ; row 0
+        beq     TC3
+        lda     -16,y
+        bsr     ISW
+        bcc     TC3
+        orb     #4
+TC3     lda     BROW
+        cmpa    #1              ; row 14
+        beq     TCX
+        lda     16,y
+        bsr     ISW
+        bcc     TCX
+        orb     #8
+TCX     rts
+* ISW: C set when tile type A joins a wall line (wall, block, door)
+ISW     cmpa    #1
+        beq     ISY
+        cmpa    #2
+        beq     ISY
+        cmpa    #5
+        beq     ISY
+        andcc   #$FE
+        rts
+ISY     orcc    #1
+        rts
+* tile type -> draw code ($FF: a wall line, joined by TCODE)
+TDC     fcb     20,$FF,16,17,18,19
+
 * BUILDBG: fill MAP and the background copy from this level's draw codes (gen.py): per
 * tile, MAP gets the logic code and the background two bytes x six rows of pattern in the
 * code's colour (0 in PCOLT = the level's wall colour). The HUD rows start black.
@@ -1554,7 +1606,21 @@ BB0     std     ,x++
         cmpx    #BG+192
         blo     BB0
         ldy     LVP
-        ldy     ,y              ; the level's 240 draw codes
+        ldy     ,y              ; the level's 240 tile types, two a byte
+        ldx     #TILES
+        ldb     #120
+BU1     lda     ,y
+        lsra
+        lsra
+        lsra
+        lsra
+        sta     ,x+
+        lda     ,y+
+        anda    #15
+        sta     ,x+
+        decb
+        bne     BU1
+        ldy     #TILES
         ldu     #MAP
         ldx     #BG+192
         stx     SCRP
@@ -1562,7 +1628,8 @@ BB0     std     ,x++
         sta     BROW
 BB1     lda     #16
         sta     BCOL
-BB2     ldb     ,y+
+BB2     lbsr    TCODE           ; B = draw code
+        leay    1,y
         stb     TIDX
         ldx     #LOGIC
         lda     b,x
@@ -1832,6 +1899,7 @@ BCOL    rmb     1
 TIDX    rmb     1
 TK      rmb     1
 TKPREV  rmb     1
+TILES   rmb     240
 ENDVARS
 
         if      LHSZ-21

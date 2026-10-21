@@ -4,15 +4,15 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
 (CAMCO). An unofficial fan game; not affiliated with or endorsed by the owners of Pac-Man.
 
     LOADM"PACFAN":EXEC      arrow keys move, SPACE starts, BREAK returns to BASIC
-                            on the title, UP/DOWN pick the starting level (1-25)
+                            on the title, UP/DOWN pick the starting level (1-40)
 
 Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
 
-- 25 levels, designed in the maze editor (`editor/maze-editor.html`) and read from
+- 40 levels, designed in the maze editor (`editor/maze-editor.html`) and read from
   `levels/pacfan-project.json` at build time. Each has its own wall colour; walls are
-  joined lines (`#`) or solid blocks (`B`). Clearing a level goes to the next; after 25,
-  back to 1, with the ghosts a little faster each time. The level number is in the
-  score bar (L01..L25) and on the title.
+  joined lines (`#`) or solid blocks (`B`). Clearing a level goes to the next; after the
+  last, back to 1, with the ghosts a little faster each time. The level number is in the
+  score bar (L01..L40) and on the title.
 - Ghost house with a door: red starts above the door, the others inside; they leave
   through the door (by dot count), and eaten ghosts' eyes go back in through it. The
   player can never pass the door.
@@ -70,5 +70,11 @@ What the engine needs and checks:
   and the line says so. If the ghosts' exit is cut off from the player, the line warns:
   the ghosts can never reach the player on that level.
 
-Current warnings: levels 6, 9 and 10 are split in two -- the ghost house opens into a
-part of the maze the player cannot get to (64, 16 and 26 dots removed respectively).
+Each level costs 201 bytes (120 of tiles at four bits each -- the engine works out the
+wall joins at level start -- 21 of header, 60 of the eyes' way-home map). With 40 levels
+the image ends at $6D59 against the build's $7000 limit, so there is room for about three
+more levels as things stand.
+
+Current warnings: level 30's house opens into a closed four-tile pocket, so its ghosts
+never get out; level 9 has two dots nobody can reach, at (3,10) and (12,10), which are
+removed.

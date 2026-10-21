@@ -3,3 +3,4 @@ drawspr.inc
 dist/*.lst
 dist/*.sym
 __pycache__/
+dist/expected_bg.pickle
