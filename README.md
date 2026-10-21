@@ -67,6 +67,14 @@ Build: `LWASM=/path/to/lwasm ./build.sh` → `dist/PACFAN.DSK`.
 `editor/maze-editor.html` is the browser maze editor: open it in any browser. Save file
 downloads the project JSON; the shared library works only in the published copy.
 
+**Play order** is `levels/order.json` (by level name), not the project file's order, so the
+editor file can be re-saved over `levels/pacfan-project.json` without losing it. It was
+set from 400 autopilot games (10 per level, ghost speed 15 for all): level 1 kept first,
+the other 39 ranked easiest to hardest by deaths per 100 dots eaten. The ends of the
+ranking are firm; the middle (deaths per 100 dots 2.2-2.9) is within the noise of ten
+games, so neighbouring positions there could swap. A level added to the project must
+also be added to `order.json`, or gen.py stops with the name it is missing.
+
 To change the levels, save the project over `levels/pacfan-project.json` and run
 `./build.sh`. `gen.py` reads that file (it never writes it) and prints a line per level.
 What the engine needs and checks:
