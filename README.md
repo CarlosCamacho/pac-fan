@@ -78,5 +78,5 @@ wall joins at level start -- 21 of header, 60 of the eyes' way-home map). With 4
 the image ends at $6D59 against the build's $7000 limit, so there is room for about three
 more levels as things stand.
 
-Current warnings: level 9 has two dots nobody can reach, at (3,10) and (12,10), which are
-removed.
+Current warnings: none -- every level is fully reachable and every ghost house opens
+into the maze.
