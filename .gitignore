@@ -5,3 +5,4 @@ dist/*.sym
 __pycache__/
 dist/expected_bg.pickle
 dist/bot/
+dist/test/
