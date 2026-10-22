@@ -7,6 +7,11 @@ original. The owner writes in US English: use US spelling in replies and new tex
 
 `README.md` describes the game. This file is how to work on it.
 
+The owner, the other projects, the toolchain and the open threads from the claude.ai session
+that built all this are in the handoff file, imported here:
+
+@HANDOFF.md
+
 ## Build
 
 ```
