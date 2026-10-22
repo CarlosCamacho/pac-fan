@@ -32,7 +32,9 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PACFAN.BI
   (`editor/maze-editor.html`). **gen.py reads it and never writes it.** When the owner sends a
   new one, copy it over this file.
 - `levels/order.json` is the **play order**, by level name. Level 1 stays first; the other
-  39 were ranked easiest to hardest by the autopilot (below). A level added to the project
+  39 were ranked easiest to hardest by the autopilot (below). Since 22 October 2026 the project
+  file itself is in play order, renamed Level 1-40 by play position, with `wallColor` set to the
+  colour the game uses, so `order.json` is just 1..40 (its comment maps the old names). A level added to the project
   must be added here too, or gen.py stops and names it.
 - gen.py prints a line per level and **removes dots the player cannot reach**, warning about
   each. It also warns when the ghosts' exit is cut off from the player. As of the last

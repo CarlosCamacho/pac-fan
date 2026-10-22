@@ -1851,7 +1851,7 @@ SPLASH  lbsr    FILL3
         ldb     #19
         lbsr    PRINTC
         ldx     #TPROG
-        lda     #WHITEC
+        lda     #CYANC
         ldb     #44
         lbsr    PRINTC
         ldx     #TNAME1
@@ -1863,7 +1863,7 @@ SPLASH  lbsr    FILL3
         ldb     #59
         lbsr    PRINTC
         ldx     #TCOPY
-        lda     #WHITEC
+        lda     #CYANC
         ldb     #69
         lbsr    PRINTC
         ldx     #TSPACE
@@ -1871,7 +1871,7 @@ SPLASH  lbsr    FILL3
         ldb     #83
         lbsr    PRINTC
         ldx     #TLEVEL
-        lda     #WHITEC
+        lda     #YELLOWC
         ldb     #76
         lbsr    PRINTC
         clr     TKPREV
@@ -1919,11 +1919,11 @@ TKU1    sta     LEVEL
 * SHOWLV: the two digits of "LEVEL nn" on the title
 SHOWLV  lbsr    LVDIG
         pshs    b
-        ldb     #WHITEC
+        ldb     #YELLOWC
         ldx     #76*32+20
         lbsr    GLYPHAT
         puls    a
-        ldb     #WHITEC
+        ldb     #YELLOWC
         ldx     #76*32+22
         lbra    GLYPHAT
 TKX     rts
