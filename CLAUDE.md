@@ -66,7 +66,13 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PACFAN.BI
   `SCARE` loads it.
 - CoCo 3: `START` checks the reset vector (`$8C1B` on a CoCo 3) and sets `COCO3`; on a
   CoCo 3 it writes `$FF9C` = 9 (SG12) and `QUIT` writes 15. Nothing is written to `$FF9C`
-  on a CoCo 1/2. In xroar-dev on a CoCo 3, `xpc=` and `addr=` need `7` in front of the
+  on a CoCo 1/2.
+- CoCo 3 colours: SG colours come from palette registers 0-7. `START` saves BASIC's (`PALSAV`)
+  and loads `PALCMP`, or `PALRGB` when register 1 reads `$36` (BASIC's `PALETTE RGB` set,
+  ROM `$E664`; the composite start-up set is at `$C236`, register 1 = `$24`). `QUIT` puts
+  `PALSAV` back. The two tables are the nearest of all 64 codes to xroar-dev's CoCo 2 colours
+  (CIE Lab), measured with a probe that stepped the palette through every code. They match
+  the emulator; a real composite set may differ. In xroar-dev on a CoCo 3, `xpc=` and `addr=` need `7` in front of the
   four hex digits, because the MMU maps logical `$0000-$FFFF` to physical `$70000-$7FFFF`.
 - Labels `LCLEAR`, `GOVER`, `MGREV`, `MGOUT`, `STWD`, `STWU` are test hooks for emulator
   traps. Keep them.
@@ -111,6 +117,5 @@ python3 tools/rank.py     # difficulty ranking; --write rewrites levels/order.js
 
 ## Open ideas the owner has not decided
 
-- On a CoCo 3, set the palette (`$FFB0`-`$FFB7`) so the colours match a CoCo 2's, and put
-  BASIC's back on exit. Today the CoCo 3 shows its default shades (cyan looks green).
+- Check the CoCo 3 palette tables on a real composite monitor and an RGB monitor.
 - CoCo 3 support has run only in xroar-dev; the owner has an `SGTEST` disk to try `$FF9C`.

@@ -7,9 +7,9 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
                             on the title, UP/DOWN pick the starting level (1-40)
 
 Needs a 32K CoCo 1 or 2, or a CoCo 3. On a CoCo 3 the game sets `$FF9C` to 9, which makes
-the GIME show SG12, and puts back 15 when BREAK returns to BASIC. The CoCo 3 shows the
-same eight colour codes in its own palette's shades. Tried in xroar-dev only, not yet on
-a real CoCo 3.
+the GIME show SG12, and loads palette registers 0-7 with the codes nearest a CoCo 2's eight
+SG colours: a composite set, or an RGB set if BASIC was in `PALETTE RGB`. BREAK puts back
+15 and BASIC's own palette. Tried in xroar-dev only, not yet on a real CoCo 3.
 
 - 40 levels, designed in the maze editor (`editor/maze-editor.html`) and read from
   `levels/pacfan-project.json` at build time. Wall colours follow the play order

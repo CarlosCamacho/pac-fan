@@ -51,6 +51,22 @@ START   orcc    #$50            ; interrupts off for the whole game
         inc     COCO3
         lda     #9
         sta     $FF9C
+* ...and the SG colours (palette registers 0-7) set to look like a CoCo 2's. BASIC's own
+* values are kept for QUIT. Register 1 (yellow) says which set BASIC has loaded: $36 after
+* PALETTE RGB, $24 for composite (the start-up set).
+        ldx     #$FFB0
+        ldu     #PALSAV
+PSV1    lda     ,x+
+        anda    #$3F            ; only six bits read back
+        sta     ,u+
+        cmpx    #$FFB8
+        bne     PSV1
+        ldu     #PALCMP
+        lda     PALSAV+1
+        cmpa    #$36
+        bne     PSV2
+        ldu     #PALRGB
+PSV2    lbsr    SETPAL
 ST3
 * sound: DAC selected (SEL1 = SEL2 = 0), sound enabled ($FF23 bit 3)
         lda     $FF01
@@ -1597,12 +1613,28 @@ QUIT    lds     SAVES0          ; leave from anywhere
         lda     $FF22
         anda    #$07
         sta     $FF22
-        tst     COCO3           ; CoCo 3: the GIME back to normal text
+        tst     COCO3           ; CoCo 3: the GIME back to normal text, BASIC's colours back
         beq     QT1
         lda     #15
         sta     $FF9C
+        ldu     #PALSAV
+        bsr     SETPAL
 QT1     andcc   #$AF
         rts
+
+* SETPAL: CoCo 3 palette registers 0-7 (the SG colours) from the 8 bytes at U
+SETPAL  ldx     #$FFB0
+SPL1    lda     ,u+
+        sta     ,x+
+        cmpx    #$FFB8
+        bne     SPL1
+        rts
+
+* CoCo 3 codes nearest a CoCo 2's SG colours (measured in xroar-dev: CIE Lab, nearest of
+* all 64 codes, green and cyan kept apart). Green, yellow, blue, red, buff, cyan, magenta,
+* orange.
+PALCMP  fcb     $11,$34,$0C,$07,$3F,$1E,$18,$15     ; composite
+PALRGB  fcb     $10,$3E,$0E,$21,$3F,$11,$2F,$26     ; RGB monitor
 
 * ---------------------------------------------------------------- timing and screens
 WAITVS  lda     $FF02           ; clear the field-sync flag, wait for the next (bounded)
@@ -2192,6 +2224,7 @@ STATE   rmb     1
 FRIGHT  rmb     2
 FRTIME  rmb     2
 COCO3   rmb     1
+PALSAV  rmb     8               ; CoCo 3: BASIC's palette registers 0-7, put back by QUIT
 FRAMES  rmb     1
 GCOUNT  rmb     1
 CCOUNT  rmb     1
