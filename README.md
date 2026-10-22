@@ -9,8 +9,9 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
 Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
 
 - 40 levels, designed in the maze editor (`editor/maze-editor.html`) and read from
-  `levels/pacfan-project.json` at build time. Each has its own wall colour; walls are
-  joined lines (`#`) or solid blocks (`B`). Clearing a level goes to the next; after the
+  `levels/pacfan-project.json` at build time. Wall colours follow the play order
+  (level 1 blue, then red, cyan, magenta, orange, green, yellow, round again; never white),
+  so no two levels in a row share one. Walls are joined lines (`#`) or solid blocks (`B`). Clearing a level goes to the next; after the
   last, back to 1, with the ghosts a little faster each time. The level number is in the
   score bar (L01..L40) and on the title.
 - Ghost speed rises with the level number: 15 for levels 1-8, 16 for 9-16, 17 for 17-24,
@@ -79,7 +80,8 @@ To change the levels, save the project over `levels/pacfan-project.json` and run
 `./build.sh`. `gen.py` reads that file (it never writes it) and prints a line per level.
 What the engine needs and checks:
 
-- 16x15 only (SG12 holds no more); one wall colour a level (per-wall colours are ignored).
+- 16x15 only (SG12 holds no more); wall colours come from the play position, so the editor's
+  `wallColor` and per-wall colours are ignored.
 - A ghost house (`H`) with a door (`D`) directly above it and an open tile above the door.
 - A player start (`P`); without one, the open tile nearest the bottom middle.
 - Dots the player cannot reach are removed (otherwise the level could never be cleared),

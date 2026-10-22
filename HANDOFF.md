@@ -83,7 +83,6 @@ complete skill as a zip.
 
 ## Open threads (the owner has not decided)
 
-- Rotate wall colours so neighbouring levels in the play order don't share one.
 - Shorten power-pill blue time by level (6 s everywhere now).
 - Pac-Fan on a CoCo 3 using the `$FF9C` trick.
 - Patch an SG24 game (for example Invaders-S24) so one binary runs on a CoCo 2 and a CoCo 3.

@@ -8,6 +8,7 @@ The maze is 16x15 tiles of 4x6 elements under a one-tile HUD; sprites are one ti
 import json, os, sys
 LEVELS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "levels", "pacfan-project.json")
 GREEN, YELLOW, BLUE, RED, BUFF, CYAN, MAGENTA, ORANGE = range(8)
+WALLCYCLE = [BLUE, RED, CYAN, MAGENTA, ORANGE, GREEN, YELLOW]     # blue first: level 1
 TW, TH = 4, 6
 W, H = 16, 15
 
@@ -153,7 +154,10 @@ for li, lv in enumerate(levels):
     packed = bytearray(sum(homed[i + k] << (2 * k) for k in range(4)) for i in range(0, 240, 4))
     ndots = sum(1 for v in data if v in (D_DOT, D_PILL))
     assert 0 < ndots < 256
-    wc = int(lv.get("wallColor", BLUE)) & 7
+    # wall colour by PLAY POSITION, not the editor's wallColor: level 1 blue, then each level
+    # the next colour round the SG palette, skipping buff (it reads as white), so neighbours
+    # never share one. Black is not a colour in SG modes. 7 colours, so the cycle is 7 long.
+    wc = WALLCYCLE[li % len(WALLCYCLE)]
     hdr = [0x80 | wc << 4, ndots,
            pc * 4, pr * 6 + 6,                                   # player
            dc * 4 + (2 if two else 0), er * 6 + 6,               # red, above the door

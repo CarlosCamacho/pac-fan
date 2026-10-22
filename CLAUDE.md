@@ -38,8 +38,9 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PACFAN.BI
   build, no level has a warning. Dead ends are reported, but the owner uses them on
   purpose; they are not errors.
 - Engine limits that gen.py enforces: 16×15 only; a house `H` with its door `D` directly
-  above and an open tile above the door; one wall colour per level (per-wall colours in
-  the editor are ignored); `P` = player start (else the open tile nearest the bottom
+  above and an open tile above the door; wall colour set by play position in gen.py
+  (`WALLCYCLE`: blue, red, cyan, magenta, orange, green, yellow; buff skipped because it reads
+  as white), so the editor's `wallColor` and per-wall colours are ignored; `P` = player start (else the open tile nearest the bottom
   middle).
 
 ## How the engine works (where things live in pacfan.asm)
@@ -100,7 +101,6 @@ python3 tools/rank.py     # difficulty ranking; --write rewrites levels/order.js
 
 ## Open ideas the owner has not decided
 
-- Rotate wall colours so neighbouring levels in the play order don't share one.
 - Power-pill blue time is 6 s on every level; the arcade shortens it level by level.
 - Pac-Fan on a CoCo 3 via the `$FF9C` semigraphics trick (`POKE &HFF9C,9` for SG12). This is
   untested on hardware; the owner has an `SGTEST` disk to try it.
