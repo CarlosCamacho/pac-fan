@@ -35,7 +35,7 @@ tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kep
 ### Skill versions at handoff
 
 coco-hardware 3.26 · coco1and2-assembly 3.29 · coco-router 3.27 · coco-tooling 3.27 ·
-coco3-assembly 3.25 · 6809-dev 3.24 · disk-basic 3.24 · coco1and2-basic 3.21 · 6309-dev 3.17 ·
+coco3-assembly 3.26 (built on the installed 3.24; the 3.25 listed here was not installed) · 6809-dev 3.24 · disk-basic 3.24 · coco1and2-basic 3.21 · 6309-dev 3.17 ·
 coco3-basic 3.17 · 6809-to-68000 3.16 · coco3-basic09 3.11 · 6502-to-6809 3.6 ·
 z80-to-6809 3.2 · coco3-os9-assembly 1.3 · flex09-os 1.2.
 
@@ -83,12 +83,13 @@ complete skill as a zip.
 
 ## Open threads (the owner has not decided)
 
-- Shorten power-pill blue time by level (6 s everywhere now).
-- Pac-Fan on a CoCo 3 using the `$FF9C` trick.
 - Patch an SG24 game (for example Invaders-S24) so one binary runs on a CoCo 2 and a CoCo 3.
-- More levels: about 480 bytes are free, roughly two levels. Many more would mean packing
+- More levels: about 330 bytes are free (October 22), roughly one level. Many more would mean packing
   harder or loading levels from disk (with CoCoSDC support).
-- The death flash could include the door, or run faster or slower.
+
+Done in Claude Code on October 22: blue time by level (6 s down to 2 s), the door in the death
+flash with no white (speed kept at 4 frames a color), CoCo 3 support through `$FF9C` with a
+CoCo 2-matching palette, and coco3-assembly v3.26. See `CLAUDE.md`.
 
 ## How the session went, briefly
 
