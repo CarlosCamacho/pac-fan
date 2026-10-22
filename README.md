@@ -1,4 +1,4 @@
-# PAC-FAN — a maze-chase game for CoCo 1/2 Semigraphics 12
+# PAC-FAN — a maze-chase game for CoCo 1/2/3 Semigraphics 12
 
 A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos A. Camacho
 (CAMCO). An unofficial fan game; not affiliated with or endorsed by the owners of Pac-Man.
@@ -6,7 +6,10 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
     LOADM"PACFAN":EXEC      arrow keys move, SPACE starts, BREAK returns to BASIC
                             on the title, UP/DOWN pick the starting level (1-40)
 
-Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
+Needs a 32K CoCo 1 or 2, or a CoCo 3. On a CoCo 3 the game sets `$FF9C` to 9, which makes
+the GIME show SG12, and puts back 15 when BREAK returns to BASIC. The CoCo 3 shows the
+same eight colour codes in its own palette's shades. Tried in xroar-dev only, not yet on
+a real CoCo 3.
 
 - 40 levels, designed in the maze editor (`editor/maze-editor.html`) and read from
   `levels/pacfan-project.json` at build time. Wall colours follow the play order
@@ -14,6 +17,9 @@ Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
   so no two levels in a row share one. Walls are joined lines (`#`) or solid blocks (`B`). Clearing a level goes to the next; after the
   last, back to 1, with the ghosts a little faster each time. The level number is in the
   score bar (L01..L40) and on the title.
+- Power-pill blue time shortens on the same steps: 6 s for levels 1-8, 5 s for 9-16,
+  4 s for 17-24, 3 s for 25-32 and 2 s for 33-40 and every lap after. Blue ghosts flash
+  white in their last 2 s, so on levels 33-40 they flash the whole time.
 - Ghost speed rises with the level number: 15 for levels 1-8, 16 for 9-16, 17 for 17-24,
   18 for 25-32 and 19 for 33-40 (the player moves at 16). Starting on a later level from
   the title starts at that level's speed. After level 40 the game goes round again at 19.
@@ -27,8 +33,8 @@ Needs a 32K CoCo 1 or 2 (SG12 does not exist on a CoCo 3).
   arcade, and their distance check counts the way through a tunnel, so they follow the
   player through it (the arcade measures in a straight line, which in a 16-tile maze
   meant the ghosts never chose the tunnel).
-- When the player is caught, every wall flashes through all eight colours (twice, about
-  1.5 s), then the maze returns to its own colour. Each colour is painted into the hidden
+- When the player is caught, every wall and the house door flash through the seven wall
+  colours (never white; twice, about 1.3 s), then return to their own colours. Each colour is painted into the hidden
   buffer and flipped in at field sync, so it never wipes down the screen.
 - Eyes go home by a shortest-path map gen.py computes per level (60 bytes a level),
   not by straight-line targeting, which in a soak circled forever under a house walled

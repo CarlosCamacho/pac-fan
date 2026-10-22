@@ -10,7 +10,8 @@
 *   - double-buffered, flipped at field sync.
 *
 * Controls: arrow keys. SPACE starts. BREAK returns to BASIC.
-* Needs a 32K CoCo 1 or 2 (SG12 is not available on a CoCo 3). Load: LOADM"PACFAN":EXEC
+* Needs a 32K CoCo 1, 2 or 3. A CoCo 3 gets SG12 from its GIME through $FF9C = 9 (found
+* with SGTEST; tried in XRoar and xroar-dev, not on hardware). Load: LOADM"PACFAN":EXEC
 *
 * Memory: $0E00 BUF0, $1A00 BUF1, $2600 BG (background copy), code from $3200.
 
@@ -41,6 +42,16 @@ START   orcc    #$50            ; interrupts off for the whole game
         clra
         tfr     a,dp
         sts     SAVES0
+* CoCo 3? (its reset vector is $8C1B; a CoCo 1/2's is $A027) Then $FF9C = 9 makes the
+* GIME show SG12; QUIT puts back 15. On a CoCo 1/2 nothing is written there.
+        clr     COCO3
+        ldd     $FFFE
+        cmpd    #$8C1B
+        bne     ST3
+        inc     COCO3
+        lda     #9
+        sta     $FF9C
+ST3
 * sound: DAC selected (SEL1 = SEL2 = 0), sound enabled ($FF23 bit 3)
         lda     $FF01
         anda    #$F7
@@ -199,6 +210,11 @@ NLS1    tst     LAP
         beq     NLS2
         lda     #19
 NLS2    sta     GSPD
+        nega                    ; blue time on the same steps: 21 - speed seconds, so
+        adda    #21             ; 6 s for levels 1-8 down to 2 s for 33-40 (and after)
+        ldb     #60
+        mul
+        std     FRTIME
         ldb     LEVEL           ; Y -> this level's header (gen.py, from the maze editor)
         lda     #LHSZ
         mul
@@ -771,7 +787,7 @@ MT2     leau    ESIZE,u
 MTX     rts
 
 * SCARE: power pellet. Every ghost that is not eyes turns blue, slows and reverses.
-SCARE   ldd     #360
+SCARE   ldd     FRTIME          ; this level's blue time (NEWLEVEL)
         std     FRIGHT
         ldu     #ENTS+ESIZE
         ldb     #4
@@ -1581,7 +1597,11 @@ QUIT    lds     SAVES0          ; leave from anywhere
         lda     $FF22
         anda    #$07
         sta     $FF22
-        andcc   #$AF
+        tst     COCO3           ; CoCo 3: the GIME back to normal text
+        beq     QT1
+        lda     #15
+        sta     $FF9C
+QT1     andcc   #$AF
         rts
 
 * ---------------------------------------------------------------- timing and screens
@@ -1640,8 +1660,9 @@ PA1     pshs    b
         bne     PA1
         rts
 
-* DEATHFLASH: every wall steps through all eight SG colours, twice, then goes back to the
-* level's colour. Recolouring takes about 1.7 frames, so it is done in the hidden buffer
+* DEATHFLASH: every wall and the house door step through the seven wall colours (FLCOLS;
+* never buff, which reads as white), twice, FLFR frames a colour, then go back to their own
+* colours. Recolouring takes about 1.7 frames, so it is done in the hidden buffer
 * and flipped in at field sync: done on the shown one it wiped down the screen.
 DEATHFLASH
         ldu     #BUF0           ; copy the shown screen (not BACK) into BACK, so both
@@ -1650,21 +1671,21 @@ DEATHFLASH
         ldu     #BUF1
 DF0     ldx     BACK
         lbsr    COPY3K
-        lda     #16             ; 2 passes x 8 colours
+        lda     #14             ; 2 passes x 7 colours
         sta     FLN
 DF1     ldx     BACK
         stx     FLBUF
-        lda     FLN
-        anda    #7
-        asla
-        asla
-        asla
-        asla
-        ora     #$80            ; $80 | colour << 4
+        ldb     FLN
+        cmpb    #7
+        bls     DF1A
+        subb    #7
+DF1A    ldx     #FLCOLS-1
+        lda     b,x             ; FLN 1..7 (small: the signed offset is safe)
+        sta     FLD             ; the door flashes with the walls
         lbsr    WALLCOL
         lbsr    WAITVS
         lbsr    FLIP
-        ldb     #3              ; four frames a colour
+        ldb     #FLFR-1
 DF2     pshs    b
         lbsr    WAITVS
         puls    b
@@ -1672,7 +1693,9 @@ DF2     pshs    b
         bne     DF2
         dec     FLN
         bne     DF1
-        ldx     BACK            ; back to the level's colour: hidden one, flip, then the other
+        lda     #DOORC          ; back to their own colours: hidden one, flip, then the other
+        sta     FLD
+        ldx     BACK
         stx     FLBUF
         lda     WCOL
         lbsr    WALLCOL
@@ -1681,8 +1704,9 @@ DF2     pshs    b
         ldx     BACK
         stx     FLBUF
         lda     WCOL
-* WALLCOL: recolour every wall tile (MAP = 1) of the buffer at FLBUF to colour byte A
-WALLCOL sta     FLC
+* WALLCOL: recolour every wall tile (MAP = 1) of the buffer at FLBUF to colour byte A,
+* and the door (MAP = 4) to FLD
+WALLCOL sta     FLW
         ldu     #MAP
         ldx     FLBUF
         leax    192,x           ; the maze starts below the score row
@@ -1691,8 +1715,13 @@ WALLCOL sta     FLC
 WC1     lda     #16
         sta     BCOL
 WC2     lda     ,u+
+        ldb     FLW
         cmpa    #1
+        beq     WC2A
+        ldb     FLD
+        cmpa    #4
         bne     WC4
+WC2A    stb     FLC
         ldb     #6
         pshs    x
 WC3     lda     ,x
@@ -1714,6 +1743,9 @@ WC4     leax    2,x
         dec     BROW
         bne     WC1
         rts
+
+FLCOLS  fcb     $90,$80,$F0,$E0,$D0,$B0,$A0 ; read backwards: blue, red, cyan, magenta,
+*                                       orange, green, yellow (gen.py's WALLCYCLE)
 
 * SETF: SAM display offset F6-F0 = A (512-byte units)
 SETF    ldx     #$FFC6
@@ -2133,6 +2165,8 @@ WHITEC  equ     $C0             ; colour 4 (buff) | graphics bit
 YELLOWC equ     $90
 REDC    equ     $B0
 CYANC   equ     $D0
+DOORC   equ     $E0             ; colour 6 (magenta), as gen.py draws the door
+FLFR    equ     4               ; death flash: frames a colour
 
         include "tables.inc"
         include "drawspr.inc"
@@ -2156,6 +2190,8 @@ LIVES   rmb     1
 GSPD    rmb     1
 STATE   rmb     1
 FRIGHT  rmb     2
+FRTIME  rmb     2
+COCO3   rmb     1
 FRAMES  rmb     1
 GCOUNT  rmb     1
 CCOUNT  rmb     1
@@ -2223,6 +2259,8 @@ LAP     rmb     1
 FLBUF   rmb     2
 FLN     rmb     1
 FLC     rmb     1
+FLW     rmb     1
+FLD     rmb     1
         ifdef   BOT
 BFD     rmb     240
 BQ      rmb     240
