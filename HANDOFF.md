@@ -1,6 +1,6 @@
-# Handoff from the claude.ai session (October 2026)
+# Handoff from the earlier chat session (October 2026)
 
-This file carries a long claude.ai working session over to Claude Code. `CLAUDE.md` covers
+This file carries a long earlier working session over to this repository. `CLAUDE.md` covers
 how to work on Pac-Fan itself; this file covers who the owner is, what else was built, the
 tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kept current.
 
@@ -24,11 +24,11 @@ tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kep
 | What | Where | State |
 |---|---|---|
 | **Pac-Fan** (SG12 maze game, CoCo 1/2) | this repo | 40 levels, played in order easiest to hardest; see `CLAUDE.md` |
-| Maze editor (HTML) | `editor/maze-editor.html`; also published as a claude.ai artifact | Saves project JSON; the owner designs levels in it |
+| Maze editor (HTML) | `editor/maze-editor.html`; also published as a web artifact | Saves project JSON; the owner designs levels in it |
 | **SGTEST** (SG8/12/24 test cards, CoCo 2 and 3) | `assets/sgtest/` inside the **coco-hardware** skill (v3.26) | Done; results below |
 | GHOSTS demo (the stack-blast SG12 technique Pac-Fan grew from) | not in a repo; `ghosts-src.zip` was delivered in chat | Done |
 | Early SG12 Pac-Man prototype `pac12` | superseded by Pac-Fan | — |
-| CoCo **skills** (16 of them) | installed on his claude.ai account; delivered as zips | See versions below |
+| CoCo **skills** (16 of them) | installed on his account; delivered as zips | See versions below |
 | **Audits** of his CoCo repos (20 of them: Beast in the Shadow, dk, GEM/9, 1942-coco3, Invaders-S24, Wulfenstein3D-24, CoCoTosh, CoCo Baseball 2, Kabomb, Balloon Fighter, Speed Bots, CoCoVille, Crypt Quest, Gataga, Insecta, Planet Miners, SEUCK-CoCo3, EmEsDOS09, CoCo-C-Studio, Wulfenstein 3D) | delivered in chat as `AUDIT-<repo>.md` | Done; each game is worked on in its own session |
 | SKILLTST.DSK (hardware test programs for the skills) | delivered in chat | Results folded into the skills |
 
@@ -49,7 +49,7 @@ complete skill as a zip.
 - **LWTOOLS 4.24** (`lwasm`): no longer packaged for Ubuntu. Build it from source; the
   `stahta01/LWTools` mirror has it.
 - **xroar-dev** (<https://github.com/milliluk/xroar-dev>): the emulator with traps, RAM dumps,
-  screenshots and input scripts. The skills recommend that every Claude Code session install
+  screenshots and input scripts. The skills recommend that every cloud coding session install
   it. ROMs are not distributable: get `bas13.rom`, `extbas11.rom`, `disk11.rom` (CoCo 2) and
   `coco3.rom` from the owner.
 - Running it: `-headless -rompath ROMS -machine cocous -ram 32 -load-fd0 X.DSK -input-script S.txt`
@@ -67,7 +67,7 @@ complete skill as a zip.
 
 ## Findings worth keeping
 
-- **CoCo 3 semigraphics via `$FF9C`** (SGTEST, owner in XRoar and Claude in xroar-dev; not on
+- **CoCo 3 semigraphics via `$FF9C`** (SGTEST, owner in XRoar and the assistant in xroar-dev; not on
   hardware):
   - 8 gives SG8, 9 gives SG12, 10 gives SG24; 7 gives SG6 row height; 15 is normal and must be
     restored on exit.
@@ -87,7 +87,7 @@ complete skill as a zip.
 - More levels: about 330 bytes are free (October 22), roughly one level. Many more would mean packing
   harder or loading levels from disk (with CoCoSDC support).
 
-Done in Claude Code on October 22: blue time by level (6 s down to 2 s), the door in the death
+Done on October 22: blue time by level (6 s down to 2 s), the door in the death
 flash with no white (speed kept at 4 frames a color), CoCo 3 support through `$FF9C` with a
 CoCo 2-matching palette, and coco3-assembly v3.26. See `CLAUDE.md`.
 

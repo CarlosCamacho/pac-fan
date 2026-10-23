@@ -1,4 +1,4 @@
-# Pac-Fan — working notes for Claude
+# Pac-Fan — working notes for the assistant
 
 A maze-chase game for the TRS-80 Color Computer 1/2 in **Semigraphics 12** (64×96 elements,
 8 colours), 6809 assembly, by Carlos A. Camacho (CAMCO). It is a fan game: never use the
@@ -7,7 +7,7 @@ original. The owner writes in US English: use US spelling in replies and new tex
 
 `README.md` describes the game. This file is how to work on it.
 
-The owner, the other projects, the toolchain and the open threads from the claude.ai session
+The owner, the other projects, the toolchain and the open threads from the earlier chat session
 that built all this are in the handoff file, imported here:
 
 @HANDOFF.md

@@ -1,5 +1,4 @@
 <title>Pac-Fan Maze Editor</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -723,7 +722,7 @@ $("btnSaveFile").addEventListener("click", async () => {
 function renderLib() {
   const box = $("lib"); box.textContent = "";
   if (!S.db) { const s = document.createElement("span"); s.className = "status"; s.style.whiteSpace = "normal"; s.textContent = "The library isn't available in this view. Use Save file."; box.append(s); $("btnSaveLib").disabled = true; return; }
-  if (!S.libDocs.length) { const s = document.createElement("span"); s.className = "status"; s.style.whiteSpace = "normal"; s.textContent = "No saved projects yet. Save to library keeps this project here, where Claude can read it to build the levels."; box.append(s); return; }
+  if (!S.libDocs.length) { const s = document.createElement("span"); s.className = "status"; s.style.whiteSpace = "normal"; s.textContent = "No saved projects yet. Save to library keeps this project here, where the assistant can read it to build the levels."; box.append(s); return; }
   for (const d of S.libDocs) {
     const v = d.data(); const row = document.createElement("div"); row.className = "libitem";
     const n = document.createElement("div"); n.className = "n"; n.textContent = v.name || "Untitled";
@@ -739,7 +738,7 @@ $("btnSaveLib").addEventListener("click", async () => {
   try {
     const ref = S.projectId ? S.db.collection("projects").doc(S.projectId) : S.db.collection("projects").doc();
     await ref.set({ name: S.project.name, updated: Date.now(), levelCount: S.project.levels.length, project: JSON.parse(JSON.stringify(S.project)) });
-    S.projectId = ref.id; setDirty(false); renderLib(); toast("Saved to library: Claude can read it from here");
+    S.projectId = ref.id; setDirty(false); renderLib(); toast("Saved to library: the assistant can read it from here");
   } catch (err) {
     toast(err && err.code === "invalid_argument" ? "You can view this library but not save to it" : err && err.code === "quota_exceeded" ? "The library is full: delete an old project first" : "Couldn't save: try again");
   } finally { btn.disabled = false; }
