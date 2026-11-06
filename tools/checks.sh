@@ -8,6 +8,7 @@
 #   break    BREAK is noticed at 29 moments across a game start, a death, the flash and
 #            READY! (a 300 ms tap each); and leaving mid-tune, mid-flash and mid-READY!
 #            gives back a working BASIC from which EXEC restarts the game (CoCo 2 and 3)
+#   basic    after BREAK, BASIC works as before: a typed program lists and runs (CoCo 2 and 3)
 #   fuzz     nothing depends on leftover RAM: the variable area is filled with different
 #            patterns at START and the screens and game state must come out identical
 #            (title and autopilot play, CoCo 2 and 3)
@@ -400,9 +401,40 @@ sys.exit(1 if bad else 0)
 PY
 }
 
+# basic: after BREAK, BASIC works as it did before the game: a typed program lists and runs.
+# (The game's screens and background sit where BASIC keeps its program; QUIT puts back the
+# empty-program marker. Without it LIST showed garbage and RUN gave ?SN ERROR.)
+check_basic() {
+  O=$D/basic; rm -rf "${O:?}"; mkdir -p "$O"
+  python3 -I - "$O/in.txt" <<'PY'
+import sys
+L = ['wait 3000', 'type LOADM"PACFAN":EXEC\\r', 'wait 8000', 'key space down', 'wait 300', 'key space up', 'wait 12000',
+     'key break down', 'wait 300', 'key break up', 'wait 1500',
+     'type 10 PRINT "HELLO";2*21\\r', 'wait 500', 'type 20 FOR I=1 TO 3:PRINT I:NEXT\\r', 'wait 500', 'type RUN\\r', 'wait 3000']
+open(sys.argv[1], 'w').write('\n'.join(L) + '\n')
+PY
+  for m in c2 c3; do
+    [ $m = c3 ] && ! have3 && { echo "SKIP basic on CoCo 3 (no coco3.rom)"; continue; }
+    emu $m -load-fd0 "$DSK" -input-script "$O/in.txt" -trap "seconds=42" -trap-ram "$O/$m.ram" -trap-timeout 1 -timeout 100 >/dev/null 2>&1 &
+  done
+  wait
+  for m in c2 c3; do
+    [ -f "$O/$m.ram" ] || continue
+    python3 -I - "$O/$m.ram" $([ $m = c3 ] && echo 458752 || echo 0) <<'PY' && say PASS "basic: $m after BREAK, a typed program runs (HELLO 42, then 1 2 3)" || say FAIL "basic: $m after BREAK, a typed program does not run"
+import sys
+d = open(sys.argv[1], 'rb').read()[int(sys.argv[2]) + 0x400:int(sys.argv[2]) + 0x600]
+rows = [''.join(chr((c & 0x3F) + (64 if (c & 0x3F) < 32 else 0)) for c in d[r * 32:r * 32 + 32]).strip() for r in range(16)]
+i = [k for k, r in enumerate(rows) if r == 'HELLO 42']
+ok = bool(i) and rows[i[-1] + 1:i[-1] + 4] == ['1', '2', '3']
+if not ok: print('  screen:', ' | '.join(r for r in rows if r)[:200])
+sys.exit(0 if ok else 1)
+PY
+  done
+}
+
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break fuzz speed lap title score eyes overrun protect
+[ $# -gt 0 ] || set -- break basic fuzz speed lap title score eyes overrun protect
 for c in "$@"; do
-  case $c in break|fuzz|speed|lap|title|score|eyes|overrun|protect) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
+  case $c in break|basic|fuzz|speed|lap|title|score|eyes|overrun|protect) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done
 exit $FAILED

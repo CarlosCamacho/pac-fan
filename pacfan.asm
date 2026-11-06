@@ -1703,7 +1703,16 @@ QUIT    lds     SAVES0          ; leave from anywhere
         lda     $FF22
         anda    #$07
         sta     $FF22
-        tst     COCO3           ; CoCo 3: the GIME back to normal text, BASIC's colours back
+        ldx     $0019           ; BASIC's program starts (TXTTAB) where the game's screens and
+        cmpx    #BUF0           ; background are, so the game overwrote the empty program's
+        blo     QT0             ; marker. Put it back, as NEW leaves it: a zero byte before the
+        clr     -1,x            ; program, a zero link at its start, and the variable pointers
+        clr     ,x+             ; (VARTAB, ARYTAB, ARYEND) just after it. Without this LIST shows
+        clr     ,x+             ; garbage and a typed program will not RUN. (A program that
+        stx     $001B           ; lives below $0E00 was not touched: leave it.)
+        stx     $001D
+        stx     $001F
+QT0     tst     COCO3           ; CoCo 3: the GIME back to normal text, BASIC's colours back
         beq     QT1
         lda     #15
         sta     $FF9C

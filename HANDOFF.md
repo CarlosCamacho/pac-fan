@@ -84,7 +84,7 @@ complete skill as a zip.
 ## Open threads (the owner has not decided)
 
 - Patch an SG24 game (for example Invaders-S24) so one binary runs on a CoCo 2 and a CoCo 3.
-- More levels: about 236 bytes are free (November 6); a level costs 201, so one more fits. Many more would mean packing
+- More levels: about 217 bytes are free (November 6); a level costs 201, so one more fits. Many more would mean packing
   harder or loading levels from disk (with CoCoSDC support).
 
 Done on October 22: blue time by level (6 s down to 2 s), the door in the death
@@ -109,6 +109,11 @@ on all 40 levels under `-protect-mode` with no write into code, no jump into dat
 under 20 bytes; level select, the score on screen (including a rollover past 999,999) and the
 eyes' way home on every tile of every level all check out. They are now `tools/checks.sh`
 checks (`protect`, `title`, `score`, `eyes`), each shown to fail on a deliberate bug.
+
+Third hardening pass, November 6: one real bug. After BREAK, BASIC only worked for immediate
+commands: a typed program listed as garbage or would not run, because the game's screens sit on
+BASIC's program area and had overwritten the empty-program marker. `QUIT` now restores it
+(`CLAUDE.md`, "BASIC after BREAK"); the `basic` check guards it on a CoCo 2 and a CoCo 3.
 
 ## How the session went, briefly
 
