@@ -84,7 +84,7 @@ complete skill as a zip.
 ## Open threads (the owner has not decided)
 
 - Patch an SG24 game (for example Invaders-S24) so one binary runs on a CoCo 2 and a CoCo 3.
-- More levels: about 280 bytes are free (November 6), roughly one level. Many more would mean packing
+- More levels: about 236 bytes are free (November 6); a level costs 201, so one more fits. Many more would mean packing
   harder or loading levels from disk (with CoCoSDC support).
 
 Done on October 22: blue time by level (6 s down to 2 s), the door in the death
@@ -94,8 +94,15 @@ CoCo 2-matching palette, and coco3-assembly v3.26. See `CLAUDE.md`.
 Done on November 6 ("harden existing features"): BREAK now works everywhere (it was dead for
 the 4.8 s tune and for the death flash and READY!); CoCo 3 high speed no longer doubles the
 music's pitch; `tools/checks.sh` and `tools/botdiff.py` guard these; a leftover-RAM fuzz, 400
-autopilot games, PAL and 6847T1 machines and the lap wrap all came out clean. The frame-budget
-finding (about 7% of frames run long) is in `CLAUDE.md`, undecided.
+autopilot games, PAL and 6847T1 machines and the lap wrap all came out clean.
+
+Frame timing, November 6: a late frame costs two video fields (a hiccup from 60 to 30 fps). A
+first count said 7% of frames ran late; that was a bug in the test counter (it started from
+leftover RAM). The real figure was 0.5%, almost all of it frames that redrew the whole HUD
+for a dot while a ghost also made a decision. Redrawing only the changed score digits cut it
+to 0.02% (the rest are frames that eat a ghost, which play a blocking sound on purpose). The
+game state is the same frame for frame: 400 autopilot games end identically, and the screens
+match at the same frame numbers. `tools/checks.sh overrun` guards it.
 
 ## How the session went, briefly
 

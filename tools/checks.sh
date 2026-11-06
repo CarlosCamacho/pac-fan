@@ -2,7 +2,7 @@
 # Robustness checks on the built game. Run ./build.sh first (this uses dist/PACFAN.DSK and
 # dist/pacfan.sym), then:
 #
-#   tools/checks.sh                  every check but "overrun"
+#   tools/checks.sh                  every check
 #   tools/checks.sh break fuzz       just those
 #
 #   break    BREAK is noticed at 29 moments across a game start, a death, the flash and
@@ -14,7 +14,9 @@
 #   speed    CoCo 3 left at high speed (POKE 65497,0): the game runs at normal speed and
 #            high speed is back after BREAK. Also checks normal speed is left alone.
 #   lap      clearing level 40 goes round to level 1 at top speed
-#   overrun  REPORT ONLY: how many frames run past one video field (-DOVR=1 build)
+#   overrun  frames that run past one video field in the real game (random arrow keys, all
+#            40 levels, 100 s each, -DOVR=1 build): fails above 0.05% of frames. Frames that
+#            eat a ghost are not counted: their sound blocks on purpose. Takes about 2 minutes.
 #
 # SYM, DSK and SRC (the .sym, the .DSK and the .asm) can be set to check another build.
 # Needs XROAR and ROMS as for the other tools; the CoCo 3 checks also need coco3.rom in ROMS
@@ -187,32 +189,41 @@ PY
 
 check_overrun() {
   O=$D/overrun; rm -rf "${O:?}"; mkdir -p "$O"
-  "$LWASM" -9 -DBOT=1 -DOVR=1 --format=decb --symbol-dump="$O/pacfan.sym" -o "$O/PACFAN.BIN" "$SRC" || return 1
+  "$LWASM" -9 -DOVR=1 --format=decb --symbol-dump="$O/pacfan.sym" -o "$O/PACFAN.BIN" "$SRC" || return 1
   python3 "$HERE/mkdsk.py" "$O/PACFAN.DSK" "$O/PACFAN.BIN" >/dev/null
-  WS=$(s WSPACE "$O/pacfan.sym"); LV=$(s LEVEL "$O/pacfan.sym"); BS=$(s BSEED "$O/pacfan.sym")
-  byte 1 > "$O/sd.bin"; l=0
+  WS=$(s WSPACE "$O/pacfan.sym"); LV=$(s LEVEL "$O/pacfan.sym"); l=0
   while [ $l -lt 40 ]; do
     byte $l > "$O/lv$l.bin"
-    emu c2 -load-fd0 "$O/PACFAN.DSK" -input-script "$WORK/start.txt" \
+    python3 "$HERE/tools/keyplay.py" "$O/in$l.txt" $((l + 1)) 100
+    emu c2 -load-fd0 "$O/PACFAN.DSK" -input-script "$O/in$l.txt" \
       -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/lv$l.bin,format=raw,addr=0x0$LV" \
-      -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/sd.bin,format=raw,addr=0x0$BS" \
-      -trap "seconds=100" -trap-ram "$O/r$l.ram" -trap-timeout 1 -timeout 160 >/dev/null 2>&1 &
+      -trap "seconds=114" -trap-ram "$O/r$l.ram" -trap-timeout 1 -timeout 160 >/dev/null 2>&1 &
     l=$((l + 1))
   done
   wait
-  python3 -I - "$O" "$(s OVRN "$O/pacfan.sym")" "$(s TOTF "$O/pacfan.sym")" <<'PY'
+  python3 -I - "$O" <<'PY' && say PASS "overrun: frames past one field within budget" || say FAIL "overrun: too many frames run past one video field"
 import sys
-o, ov, tf = sys.argv[1], int(sys.argv[2], 16), int(sys.argv[3], 16)
-long_ = tot = 0
+b = sys.argv[1]
+S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(b + '/pacfan.sym') if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
+T = [0] * 128; X = [0] * 128
 for l in range(40):
-    d = open('%s/r%d.ram' % (o, l), 'rb').read()
-    long_ += d[ov] * 256 + d[ov + 1]; tot += d[tf] * 256 + d[tf + 1]
-print('overrun (report only): %d of %d frames (%.1f%%) ran past one video field' % (long_, tot, 100.0 * long_ / max(tot, 1)))
+    d = open('%s/r%d.ram' % (b, l), 'rb').read()
+    for i in range(128):
+        T[i] += d[S['OVRT'] + 2 * i] * 256 + d[S['OVRT'] + 2 * i + 1]
+        X[i] += d[S['OVRX'] + 2 * i] * 256 + d[S['OVRX'] + 2 * i + 1]
+def name(i):
+    return '%d ghost decisions, %d score redraws%s%s%s' % (i & 3, (i >> 2) & 3, ', ghost eaten' if i & 16 else '', ', pill' if i & 32 else '', ', mode switch' if i & 64 else '')
+tot = sum(T); gulp = sum(X[i] for i in range(128) if i & 16); other = sum(X) - gulp
+print('  %d frames: %d ran long (%d of them ate a ghost, on purpose), %d others = %.3f%%' % (tot, sum(X), gulp, other, 100.0 * other / max(tot, 1)))
+bad = [i for i in sorted(range(128), key=lambda i: -X[i]) if X[i] and not i & 16]
+for i in bad[:5]:
+    print('  %-52s %7d frames, %4d long (%.1f%%)' % (name(i), T[i], X[i], 100.0 * X[i] / T[i]))
+sys.exit(0 if other <= 0.0005 * tot else 1)
 PY
 }
 
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break fuzz speed lap
+[ $# -gt 0 ] || set -- break fuzz speed lap overrun
 for c in "$@"; do
   case $c in break|fuzz|speed|lap|overrun) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done

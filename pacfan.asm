@@ -90,11 +90,25 @@ ST3
         sta     RND
         clr     WAKAF
         clr     WAKAT
-        clr     HISC
-        clr     HISC+1
-        clr     HISC+2
         clr     LEVEL
         clr     STARTLV
+        ifdef   OVR
+        clr     OVRN            ; the test counters start at zero (RAM is not)
+        clr     OVRN+1
+        clr     TOTF
+        clr     TOTF+1
+        clr     OVRG
+        clr     ECHO
+        clr     EHUD
+        clr     EGUL
+        clr     ESCA
+        clr     EMOD
+        ldx     #OVRT
+        ldd     #0
+OVRZ    std     ,x++
+        cmpx    #OVRX+256
+        blo     OVRZ
+        endc
         tst     COCO3
         beq     SPD9
 * A CoCo 3 left at its high speed (POKE 65497,0)? The tune and the sounds are counted in
@@ -487,7 +501,11 @@ SP1     rts
 * next tile is nearest the target by straight-line distance squared; ties go up, left,
 * down, right. Frightened ghosts pick at random (then up, left, down, right).
 * Every loop count lives in memory: OPEN clobbers A, B and X.
-CHOOSE  lda     E_MODE,u        ; eyes: follow the level's way-home map (gen.py)
+CHOOSE
+        ifdef   OVR
+        inc     ECHO
+        endc
+        lda     E_MODE,u        ; eyes: follow the level's way-home map (gen.py)
         cmpa    #2
         bne     CHN0
         lbsr    HOMEDIR
@@ -806,6 +824,9 @@ MODETICK
         subd    #1
         std     MTIME
         bne     MTX
+        ifdef   OVR
+        inc     EMOD
+        endc
         lda     GMODE
         eora    #1
         sta     GMODE
@@ -831,7 +852,11 @@ MT2     leau    ESIZE,u
 MTX     rts
 
 * SCARE: power pellet. Every ghost that is not eyes turns blue, slows and reverses.
-SCARE   ldd     FRTIME          ; this level's blue time (NEWLEVEL)
+SCARE
+        ifdef   OVR
+        inc     ESCA
+        endc
+        ldd     FRTIME          ; this level's blue time (NEWLEVEL)
         std     FRIGHT
         ldu     #ENTS+ESIZE
         ldb     #4
@@ -1165,29 +1190,17 @@ PS2     ldb     #SPRSZ
 
 * ---------------------------------------------------------------- HUD and messages
 * HUD: score (6 digits, white) and lives (a yellow digit), into BG and both screens
-HUD     ldx     #0              ; offset: byte column 0, element row 0
-        ldy     #SCORE
-        lda     #3
-        sta     HCNT
-HU1     lda     ,y
-        lsra
-        lsra
-        lsra
-        lsra
-        ldb     #WHITEC
-        pshs    x,y
-        lbsr    GLYPHAT
-        puls    x,y
-        leax    2,x
-        lda     ,y+
-        anda    #$0F
-        ldb     #WHITEC
-        pshs    x,y
-        lbsr    GLYPHAT
-        puls    x,y
-        leax    2,x
-        dec     HCNT
-        bne     HU1
+* HUD: everything -- score, level, lives -- into BG and both screens. (A score change alone
+* goes to HUDS, which draws only the digits that changed: a dot changes one or two, and
+* drawing all ten glyphs three times over cost about 8,000 cycles, over half a field.)
+HUD     ldd     SCORE           ; every score digit differs from "the previous score"
+        coma
+        comb
+        std     OLDS
+        lda     SCORE+2
+        coma
+        sta     OLDS+2
+        lbsr    HUDS
         lda     #GL_L           ; L and the level number
         ldb     #CYANC
         ldx     #20
@@ -1205,6 +1218,45 @@ HU1     lda     ,y
         ldb     #YELLOWC
         ldx     #30
         lbra    GLYPHAT
+
+* HUDS: the score digits that differ from OLDS, white, into BG and both screens
+HUDS
+        ifdef   OVR
+        inc     EHUD
+        endc
+        ldx     #0              ; offset: byte column 0, element row 0
+        ldy     #SCORE
+        lda     #3
+        sta     HCNT
+HU1     lda     ,y
+        eora    3,y             ; the bits that changed in this byte
+        sta     HDIF
+        anda    #$F0
+        beq     HU2
+        lda     ,y
+        lsra
+        lsra
+        lsra
+        lsra
+        ldb     #WHITEC
+        pshs    x,y
+        lbsr    GLYPHAT
+        puls    x,y
+HU2     leax    2,x
+        lda     HDIF
+        anda    #$0F
+        beq     HU3
+        lda     ,y
+        anda    #$0F
+        ldb     #WHITEC
+        pshs    x,y
+        lbsr    GLYPHAT
+        puls    x,y
+HU3     leax    2,x
+        leay    1,y
+        dec     HCNT
+        bne     HU1
+        rts
 
 * LVDIG: A = tens, B = units of the level number shown (LEVEL + 1)
 LVDIG   lda     LEVEL
@@ -1312,6 +1364,10 @@ DRAWALL lbsr    RENDER
 ADDSCORE
         sta     ADDM
         stb     ADDL
+        ldd     SCORE           ; the old score, so HUDS draws only the digits that change
+        std     OLDS
+        lda     SCORE+2
+        sta     OLDS+2
         lda     SCORE+2
         adda    ADDL
         daa
@@ -1324,7 +1380,7 @@ ADDSCORE
         adca    #0
         daa
         sta     SCORE
-        lbra    HUD
+        lbra    HUDS
 
 * ---------------------------------------------------------------- sound (blocking, short)
 WAKA    lda     #4              ; four frames of sound
@@ -1341,7 +1397,11 @@ WK1     lda     #98             ; "ka": low to high
 WK2     sta     WAKAP
         stb     WAKAD
         rts
-GULP    ldx     #60
+GULP
+        ifdef   OVR
+        inc     EGUL
+        endc
+        ldx     #60
         ldy     #30
         lbra    SWEEP
 DEATHSND
@@ -2241,21 +2301,70 @@ FLFR    equ     4               ; death flash: frames a colour
 
         ifdef   OVR
 * OVRCHK (test build only, lwasm -DOVR=1): count frames whose work ran past the next field
-* sync (the sync flag is already set on arrival). The first frame after READY! / the tune is
-* not counted: the flag has been set for a while there.
+* sync (the sync flag is already set on arrival), and tabulate them by what the frame did:
+* signature = ghost decisions (0-3) | HUD redraws (0-3) << 2 | ghost eaten << 4 | pill << 5
+* | scatter/chase switch << 6. OVRT[sig] = frames, OVRX[sig] = long frames (16 bits each).
+* The first frame after READY! / the tune is not counted: the flag has been set for a while.
 OVRCHK  tst     OVRG
         beq     FRO1
         clr     OVRG
         lda     $FF02
-        rts
-FRO1    tst     $FF03
-        bpl     FRO2
+        bra     FRO9
+FRO1    lda     ECHO
+        cmpa    #3
+        bls     FS1
+        lda     #3
+FS1     sta     OSIG
+        lda     EHUD
+        cmpa    #3
+        bls     FS2
+        lda     #3
+FS2     asla
+        asla
+        ora     OSIG
+        sta     OSIG
+        tst     EGUL
+        beq     FS3
+        lda     OSIG
+        ora     #16
+        sta     OSIG
+FS3     tst     ESCA
+        beq     FS4
+        lda     OSIG
+        ora     #32
+        sta     OSIG
+FS4     tst     EMOD
+        beq     FS5
+        lda     OSIG
+        ora     #64
+        sta     OSIG
+FS5     ldx     #OVRT
+        ldb     OSIG
+        aslb
+        abx
+        ldd     ,x
+        addd    #1
+        std     ,x
+        ldd     TOTF
+        addd    #1
+        std     TOTF
+        tst     $FF03
+        bpl     FRO9
         ldd     OVRN
         addd    #1
         std     OVRN
-FRO2    ldd     TOTF
+        ldx     #OVRX
+        ldb     OSIG
+        aslb
+        abx
+        ldd     ,x
         addd    #1
-        std     TOTF
+        std     ,x
+FRO9    clr     ECHO
+        clr     EHUD
+        clr     EGUL
+        clr     ESCA
+        clr     EMOD
         rts
         endc
 
@@ -2276,7 +2385,8 @@ ENTS    rmb     NENT*ESIZE
 MAP     rmb     240
 DOTS    rmb     1
 SCORE   rmb     3
-HISC    rmb     3
+OLDS    rmb     3               ; the score before the last ADDSCORE (must follow SCORE: HUDS uses 3,y)
+HDIF    rmb     1
 LIVES   rmb     1
 GSPD    rmb     1
 STATE   rmb     1
@@ -2286,6 +2396,14 @@ FRTIME  rmb     2
 OVRN    rmb     2               ; frames that ran long
 TOTF    rmb     2               ; frames counted
 OVRG    rmb     1               ; 1 = skip the next frame (it follows a wait)
+OSIG    rmb     1
+ECHO    rmb     1               ; this frame: ghost decisions, HUD redraws, ghost eaten, pill, mode switch
+EHUD    rmb     1
+EGUL    rmb     1
+ESCA    rmb     1
+EMOD    rmb     1
+OVRT    rmb     256
+OVRX    rmb     256
         endc
 COCO3   rmb     1
 FASTF   rmb     1               ; CoCo 3 only: 1 = it was at high speed (put back by QUIT)
@@ -2380,9 +2498,18 @@ ENDVARS
         if      LHSZ-21
         error   "level header size disagrees with gen.py"
         endc
+        if      OLDS-SCORE-3
+        error   "OLDS must follow SCORE: HUDS reads the old score as 3,y"
+        endc
         ifdef   BOT
-        if      ENDVARS>$7800           ; the test build may use more; it never ships
-        error   "bot build runs into the stack area"
+TESTB   set     1
+        endc
+        ifdef   OVR
+TESTB   set     1
+        endc
+        ifdef   TESTB
+        if      ENDVARS>$7800           ; the test builds may use more; they never ship
+        error   "test build runs into the stack area"
         endc
         else
         if      ENDVARS>$7000
