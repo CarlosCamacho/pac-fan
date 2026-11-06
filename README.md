@@ -4,12 +4,15 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
 (CAMCO). An unofficial fan game; not affiliated with or endorsed by the owners of Pac-Man.
 
     LOADM"PACFAN":EXEC      arrow keys move, SPACE starts, BREAK returns to BASIC
-                            on the title, UP/DOWN pick the starting level (1-40)
+                            from anywhere (title, tune, play, flash), UP/DOWN pick the
+                            starting level (1-40) on the title
 
 Needs a 32K CoCo 1 or 2, or a CoCo 3. On a CoCo 3 the game sets `$FF9C` to 9, which makes
 the GIME show SG12, and loads palette registers 0-7 with the codes nearest a CoCo 2's eight
 SG colours: a composite set, or an RGB set if BASIC was in `PALETTE RGB`. BREAK puts back
-15 and BASIC's own palette. Tried in xroar-dev only, not yet on a real CoCo 3.
+15 and BASIC's own palette. A CoCo 3 left at high speed (`POKE 65497,0`) is run at normal
+speed so the music keeps its pitch, and put back at high speed on BREAK. Tried in xroar-dev
+only, not yet on a real CoCo 3.
 
 - 40 levels, designed in the maze editor (`editor/maze-editor.html`) and read from
   `levels/pacfan-project.json` at build time. Wall colours follow the play order

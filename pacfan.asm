@@ -45,6 +45,7 @@ START   orcc    #$50            ; interrupts off for the whole game
 * CoCo 3? (its reset vector is $8C1B; a CoCo 1/2's is $A027) Then $FF9C = 9 makes the
 * GIME show SG12; QUIT puts back 15. On a CoCo 1/2 nothing is written there.
         clr     COCO3
+        clr     FASTF
         ldd     $FFFE
         cmpd    #$8C1B
         bne     ST3
@@ -94,6 +95,27 @@ ST3
         clr     HISC+2
         clr     LEVEL
         clr     STARTLV
+        tst     COCO3
+        beq     SPD9
+* A CoCo 3 left at its high speed (POKE 65497,0)? The tune and the sounds are counted in
+* cycles for 0.89 MHz and would play an octave up. Count passes of a 23-cycle loop between
+* two field syncs: about 650 at 0.89 MHz and 1300 at 1.79 (PAL 780 and 1560), so 1000 or
+* more is fast. Then run slow ($FFD8) and let QUIT put fast back. No sync at all: the loop
+* gives up at 4000 and leaves the speed alone. Only a CoCo 3 does this: on a CoCo 1/2
+* $FFD9 is a mode that can crash the RAM refresh.
+        lbsr    WAITV0          ; start just after a sync
+        ldx     #0
+SPD1    leax    1,x             ; 5
+        tst     $FF03           ; 7
+        bmi     SPD2            ; 3
+        cmpx    #4000           ; 5
+        blo     SPD1            ; 3 = 23 cycles a pass
+        bra     SPD9            ; no sync came: leave it
+SPD2    cmpx    #1000
+        blo     SPD9
+        sta     $FFD8           ; normal speed
+        inc     FASTF
+SPD9
 
 NEWGAME lda     STARTLV         ; the title shows the level the last game started on
         sta     LEVEL
@@ -111,7 +133,6 @@ TI1     lda     ,x+
 WSPACE  lbsr    WAITVS
         lbsr    FLIP
         inc     FRAMES
-        lbsr    CHKBRK
         lbsr    TITLEKEYS       ; up/down: pick the starting level
         lbsr    TITLEANIM
         lbsr    RENDER
@@ -157,10 +178,13 @@ RDY     pshs    b
         lbsr    MSGOFF
 
 * ---------------------------------------------------------------- frame loop
-FRAME   lbsr    WAITVS
+FRAME
+        ifdef   OVR
+        lbsr    OVRCHK          ; test build only: count frames that ran long
+        endc
+        lbsr    WAITVS
         lbsr    FLIP
         inc     FRAMES
-        lbsr    CHKBRK
         lbsr    READKEYS
         ldu     #ENTS
         lbsr    MOVEPAC
@@ -307,6 +331,10 @@ RP2     sta     E_SPD,u
         clr     IDLEDOT
         clr     VALID0          ; nothing to restore in either buffer
         clr     VALID1
+        ifdef   OVR
+        lda     #1
+        sta     OVRG
+        endc
         lda     #2              ; redraw both screens from the background
         sta     REDRAW
         rts
@@ -1605,6 +1633,8 @@ CHKBRK  lda     #$FB            ; BREAK: column 2, row 6
         beq     QUIT
         rts
 QUIT    lds     SAVES0          ; leave from anywhere
+        lda     #$82            ; DAC at rest (a sound may have been mid-wave)
+        sta     $FF20
         lda     #2              ; text screen at $0400, SAM V = 0
         lbsr    SETF
         sta     $FFC4
@@ -1619,6 +1649,9 @@ QUIT    lds     SAVES0          ; leave from anywhere
         sta     $FF9C
         ldu     #PALSAV
         bsr     SETPAL
+        tst     FASTF           ; and the high speed it was found at
+        beq     QT1
+        sta     $FFD9
 QT1     andcc   #$AF
         rts
 
@@ -1637,7 +1670,12 @@ PALCMP  fcb     $11,$34,$0C,$07,$3F,$1E,$18,$15     ; composite
 PALRGB  fcb     $10,$3E,$0E,$21,$3F,$11,$2F,$26     ; RGB monitor
 
 * ---------------------------------------------------------------- timing and screens
-WAITVS  lda     $FF02           ; clear the field-sync flag, wait for the next (bounded)
+* WAITVS: wait for the next field sync, then look at BREAK. Every wait in the game (the
+* frame loop, READY!, the death flash, the pauses) goes through here, so BREAK is never
+* dead for longer than a frame. (CHKBRK clobbers A and B: callers keep nothing in them.)
+WAITVS  bsr     WAITV0
+        bra     CHKBRK
+WAITV0  lda     $FF02           ; clear the field-sync flag, wait for the next (bounded)
         tst     WAKAF
         bne     WVS
         ldx     #0
@@ -2068,7 +2106,8 @@ SAWPLAY clr     PH1
         clr     PH1+1
         clr     PH2
         clr     PH2+1
-SWN     ldy     ,x++            ; sample count; 0 ends the tune
+SWN     lbsr    CHKBRK          ; BREAK between notes (a tune is 4.8 s of blocking)
+        ldy     ,x++            ; sample count; 0 ends the tune
         beq     SWX
         ldd     ,x++
         std     F1
@@ -2200,6 +2239,26 @@ CYANC   equ     $D0
 DOORC   equ     $E0             ; colour 6 (magenta), as gen.py draws the door
 FLFR    equ     4               ; death flash: frames a colour
 
+        ifdef   OVR
+* OVRCHK (test build only, lwasm -DOVR=1): count frames whose work ran past the next field
+* sync (the sync flag is already set on arrival). The first frame after READY! / the tune is
+* not counted: the flag has been set for a while there.
+OVRCHK  tst     OVRG
+        beq     FRO1
+        clr     OVRG
+        lda     $FF02
+        rts
+FRO1    tst     $FF03
+        bpl     FRO2
+        ldd     OVRN
+        addd    #1
+        std     OVRN
+FRO2    ldd     TOTF
+        addd    #1
+        std     TOTF
+        rts
+        endc
+
         include "tables.inc"
         include "drawspr.inc"
 
@@ -2223,7 +2282,13 @@ GSPD    rmb     1
 STATE   rmb     1
 FRIGHT  rmb     2
 FRTIME  rmb     2
+        ifdef   OVR
+OVRN    rmb     2               ; frames that ran long
+TOTF    rmb     2               ; frames counted
+OVRG    rmb     1               ; 1 = skip the next frame (it follows a wait)
+        endc
 COCO3   rmb     1
+FASTF   rmb     1               ; CoCo 3 only: 1 = it was at high speed (put back by QUIT)
 PALSAV  rmb     8               ; CoCo 3: BASIC's palette registers 0-7, put back by QUIT
 FRAMES  rmb     1
 GCOUNT  rmb     1

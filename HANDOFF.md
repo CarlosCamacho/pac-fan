@@ -84,12 +84,18 @@ complete skill as a zip.
 ## Open threads (the owner has not decided)
 
 - Patch an SG24 game (for example Invaders-S24) so one binary runs on a CoCo 2 and a CoCo 3.
-- More levels: about 330 bytes are free (October 22), roughly one level. Many more would mean packing
+- More levels: about 280 bytes are free (November 6), roughly one level. Many more would mean packing
   harder or loading levels from disk (with CoCoSDC support).
 
 Done on October 22: blue time by level (6 s down to 2 s), the door in the death
 flash with no white (speed kept at 4 frames a color), CoCo 3 support through `$FF9C` with a
 CoCo 2-matching palette, and coco3-assembly v3.26. See `CLAUDE.md`.
+
+Done on November 6 ("harden existing features"): BREAK now works everywhere (it was dead for
+the 4.8 s tune and for the death flash and READY!); CoCo 3 high speed no longer doubles the
+music's pitch; `tools/checks.sh` and `tools/botdiff.py` guard these; a leftover-RAM fuzz, 400
+autopilot games, PAL and 6847T1 machines and the lap wrap all came out clean. The frame-budget
+finding (about 7% of frames run long) is in `CLAUDE.md`, undecided.
 
 ## How the session went, briefly
 
