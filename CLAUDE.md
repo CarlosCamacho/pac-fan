@@ -112,16 +112,29 @@ python3 tools/rank.py     # difficulty ranking; --write rewrites levels/order.js
 python3 tools/botdiff.py OLD_DIR OLD.sym NEW_DIR NEW.sym   # did an edit change any game?
 ```
 
-- `tools/checks.sh` (run after `./build.sh`; about a minute): `break` taps BREAK at 29 moments
-  and leaves mid-tune, mid-flash and mid-READY! on a CoCo 2 and a CoCo 3, then expects BASIC
-  and `EXEC` to work; `fuzz` fills the variable area with different patterns at `START` and
-  expects identical screens and state (title and autopilot play, CoCo 2 and 3); `speed`
-  (CoCo 3, needs `coco3.rom`) starts at high speed and checks normal speed is left alone and
-  high speed comes back; `lap` forces a clear of level 40; `overrun` plays all 40 levels with
-  random arrow keys (`tools/keyplay.py`) and fails if more than 0.05% of frames run past one
-  video field (not counting frames that eat a ghost). Each check
-  was shown to FAIL on a build with the bug it guards against. `SYM=`, `DSK=`, `SRC=` point
+- `tools/checks.sh` (run after `./build.sh`; about two minutes; each line prints PASS or FAIL):
+  `break` taps BREAK at 29 moments and leaves mid-tune, mid-flash and mid-READY! on a CoCo 2
+  and a CoCo 3, then expects BASIC and `EXEC` to work; `fuzz` fills the variable area with
+  different patterns at `START` and expects identical screens and state (title and autopilot
+  play, CoCo 2 and 3); `speed` (CoCo 3, needs `coco3.rom`) starts at high speed and checks
+  normal speed is left alone and high speed comes back; `lap` forces a clear of level 40;
+  `title` presses UP/DOWN (wrapping both ways) and SPACE and expects that level; `score` plays
+  45 s (and a run that starts at 999,990) and expects the score drawn in BG and both screens
+  to equal the score, digit for digit; `eyes` follows the loaded way-home map from every tile
+  of every level and expects the house tile, never through a wall; `overrun` plays all 40
+  levels with random arrow keys (`tools/keyplay.py`) and fails if more than 0.05% of frames
+  run past one video field (not counting frames that eat a ghost); `protect` runs the game and
+  the autopilot build on all 40 levels under `-protect-mode` and fails on a write into code, a
+  jump into data, or the stack more than 64 bytes below where BASIC left it. Each check was
+  shown to FAIL on a build with the bug it guards against. `SYM=`, `DSK=`, `SRC=`, `LST=` point
   it at another build.
+- **Protect mode** (`-protect-mode`) works only on the CoCo 3 memory path, which runs this
+  code unchanged, so the `protect` check runs there (physical = `$70000` + logical).
+  `tools/mksym.py LISTING SYM OUT BASE` makes its code map from the assembler listing:
+  instruction bytes are code, `fcb`/`fdb` tables are data, `rmb` (variables, buffers, stack) is
+  neither. Regenerate the map after every build. The listing indents source by 9 columns. The
+  buffers `$0E00-$31FF` are exempted because `COPY3K` uses `S` as a pointer into them. Measured
+  with the stack floor: the game uses under 20 bytes of stack, with 3 KB of room.
 - **Before any edit that should not change gameplay** (sound, input, drawing, CoCo 3),
   save `botgames.sh 10` output and its `dist/bot/pacfan.sym`, edit, run again and compare with
   `tools/botdiff.py`: the autopilot is deterministic, so every game must end identically

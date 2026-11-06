@@ -104,6 +104,12 @@ to 0.02% (the rest are frames that eat a ghost, which play a blocking sound on p
 game state is the same frame for frame: 400 autopilot games end identically, and the screens
 match at the same frame numbers. `tools/checks.sh overrun` guards it.
 
+Second hardening pass, November 6: no new bug in the game. The game and the autopilot build ran
+on all 40 levels under `-protect-mode` with no write into code, no jump into data and a stack
+under 20 bytes; level select, the score on screen (including a rollover past 999,999) and the
+eyes' way home on every tile of every level all check out. They are now `tools/checks.sh`
+checks (`protect`, `title`, `score`, `eyes`), each shown to fail on a deliberate bug.
+
 ## How the session went, briefly
 
 1. Skills review, revised skill zips, audits of his repos, test disks.

@@ -14,11 +14,17 @@
 #   speed    CoCo 3 left at high speed (POKE 65497,0): the game runs at normal speed and
 #            high speed is back after BREAK. Also checks normal speed is left alone.
 #   lap      clearing level 40 goes round to level 1 at top speed
+#   title    UP/DOWN pick the starting level (wrapping both ways) and SPACE starts on it
+#   score    the score on screen equals the score after many updates, and rolls over past 999,999
+#   eyes     on every level, from every tile, the way-home map leads the eyes back to the house
+#   protect  both the game and the autopilot build, all 40 levels, under -protect-mode (CoCo 3):
+#            no write into code, no jump into data, stack within 64 bytes (it uses under 20)
 #   overrun  frames that run past one video field in the real game (random arrow keys, all
 #            40 levels, 100 s each, -DOVR=1 build): fails above 0.05% of frames. Frames that
 #            eat a ghost are not counted: their sound blocks on purpose. Takes about 2 minutes.
 #
-# SYM, DSK and SRC (the .sym, the .DSK and the .asm) can be set to check another build.
+# SYM, DSK and SRC (the .sym, the .DSK and the .asm; LST the listing, default beside the .sym)
+# can be set to check another build.
 # Needs XROAR and ROMS as for the other tools; the CoCo 3 checks also need coco3.rom in ROMS
 # and are skipped without it. Each check prints PASS or FAIL; the exit status is 1 on a FAIL.
 . "$(dirname "$0")/emu.sh"
@@ -79,7 +85,7 @@ check_break() {
 # the autopilot build (-DBOT=1), for a game that plays itself deterministically
 botbuild() {
   B=$D/bot; mkdir -p "$B"
-  "$LWASM" -9 -DBOT=1 --format=decb --symbol-dump="$B/pacfan.sym" -o "$B/PACFAN.BIN" "$SRC" || return 1
+  "$LWASM" -9 -DBOT=1 --format=decb --list="$B/pacfan.lst" --symbol-dump="$B/pacfan.sym" -o "$B/PACFAN.BIN" "$SRC" || return 1
   python3 "$HERE/mkdsk.py" "$B/PACFAN.DSK" "$B/PACFAN.BIN" >/dev/null
 }
 
@@ -222,9 +228,181 @@ sys.exit(0 if other <= 0.0005 * tot else 1)
 PY
 }
 
+# protect: the shipped game (random arrow keys) and the autopilot build (clears levels, eats
+# pills and ghosts), 40 levels each, under xroar-dev's -protect-mode on a CoCo 3: a write into
+# code, an instruction fetched from data, or the stack growing more than 64 bytes below where
+# BASIC left it ($7F34) stops the run with exit status 70. The map comes from the listing.
+check_protect() {
+  have3 || { echo "SKIP protect (no coco3.rom)"; return; }
+  O=$D/protect; rm -rf "${O:?}"; mkdir -p "$O"
+  LST=${LST:-${SYM%.sym}.lst}
+  [ -f "$LST" ] || { say FAIL "protect: no listing at $LST (./build.sh writes it)"; return; }
+  botbuild || { say FAIL "protect: the autopilot build failed"; return; }
+  python3 "$HERE/tools/mksym.py" "$LST" "$SYM" "$O/real.gsym" 0x70000 >/dev/null || return 1
+  python3 "$HERE/tools/mksym.py" "$D/bot/pacfan.lst" "$D/bot/pacfan.sym" "$O/bot.gsym" 0x70000 >/dev/null || return 1
+  for v in real bot; do
+    if [ $v = real ]; then SY=$SYM; DK=$DSK; else SY=$D/bot/pacfan.sym; DK=$D/bot/PACFAN.DSK; fi
+    SA=$(s START "$SY"); WS=$(s WSPACE "$SY"); LV=$(s LEVEL "$SY"); BS=$(s BSEED "$SY")
+    byte 1 > "$O/sd.bin"; l=0
+    while [ $l -lt 40 ]; do
+      byte $l > "$O/lv$l.bin"
+      python3 "$HERE/tools/keyplay.py" "$O/in$l.txt" $((l + 1)) 80
+      extra=""; [ $v = bot ] && extra="-trap xpc=0x7$WS -trap-range 1-1 -trap-load $O/sd.bin,format=raw,addr=0x7$BS"
+      ( emu c3 -load-fd0 "$DK" -input-script "$O/in$l.txt" -symbols "$O/$v.gsym" -protect-mode \
+          -protect-allow 0x70E00-0x731FF -protect-stack-floor 0x77EF4 -protect-dump "$O/${v}_$l.crash" \
+          -trap "xpc=0x7$SA" -trap-range 1-1 -trap-protect-on \
+          -trap "xpc=0x7$WS" -trap-range 1-1 -trap-load "$O/lv$l.bin,format=raw,addr=0x7$LV" $extra \
+          -trap "seconds=94" -trap-timeout 1 -timeout 160 > "$O/${v}_$l.out" 2>&1; echo $? > "$O/${v}_$l.rc" ) &
+      l=$((l + 1))
+    done
+    wait
+    bad=$(grep -L '^0$' "$O/${v}"_*.rc 2>/dev/null | wc -l)
+    if [ "$bad" -eq 0 ]; then say PASS "protect: $v build, 40 levels, no write into code, no jump into data, stack within 64 bytes"
+    else
+      say FAIL "protect: $v build, $bad of 40 levels stopped by protect mode"
+      grep -h "protect: " $(grep -L '^0$' "$O/${v}"_*.rc | sed 's/\.rc$/.out/') | grep -v "armed\|checks live" | head -4 | sed 's/^/  /'
+    fi
+  done
+}
+
+# title: UP and DOWN pick the starting level (one step a press, wrapping both ways) and SPACE
+# starts the game on it.
+check_title() {
+  O=$D/title; rm -rf "${O:?}"; mkdir -p "$O"
+  FR=$(s FRAME); n=0
+  for sc in "down:39" "down,up:0" "up,up,down:1" "down,down:38" "up:1"; do
+    n=$((n + 1)); echo "${sc##*:}" > "$O/want$n"
+    python3 -I - "$O/in$n.txt" "${sc%%:*}" <<'PY'
+import sys
+out, keys = sys.argv[1], sys.argv[2].split(',')
+L = ['wait 3000', 'type LOADM"PACFAN":EXEC\\r', 'wait 8000']
+for k in keys:
+    L += ['key %s down' % k, 'wait 250', 'key %s up' % k, 'wait 250']
+open(out, 'w').write('\n'.join(L + ['key space down', 'wait 300', 'key space up', 'wait 4000']) + '\n')
+PY
+    emu c2 -load-fd0 "$DSK" -input-script "$O/in$n.txt" -trap "xpc=0x0$FR" -trap-range 1-1 \
+      -trap-ram "$O/r$n.ram" -trap-timeout 0 -timeout 60 >/dev/null 2>&1 &
+  done
+  wait
+  python3 -I - "$O" "$SYM" <<'PY' && say PASS "title: UP/DOWN pick the level (wrapping both ways) and SPACE starts on it" || say FAIL "title: level select"
+import sys
+o = sys.argv[1]
+S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(sys.argv[2]) if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
+ok = True
+for n in range(1, 6):
+    want = int(open('%s/want%d' % (o, n)).read())
+    try:
+        d = open('%s/r%d.ram' % (o, n), 'rb').read()
+        got = (d[S['LEVEL']], d[S['STARTLV']])
+    except OSError:
+        got = None
+    good = got == (want, want)
+    ok &= good
+    if not good: print('  scenario %d: wanted level index %d, got %s' % (n, want, got))
+sys.exit(0 if ok else 1)
+PY
+}
+
+# score: the score on screen is the score, in BG and both screens, after hundreds of changes
+# (HUDS redraws only the digits that changed), and past 999,999 it wraps to 0 without trouble.
+check_score() {
+  O=$D/score; rm -rf "${O:?}"; mkdir -p "$O"
+  botbuild || { say FAIL "score: the autopilot build failed"; return; }
+  B=$D/bot; SY=$B/pacfan.sym
+  WS=$(s WSPACE "$SY"); LV=$(s LEVEL "$SY"); BS=$(s BSEED "$SY"); FR=$(s FRAME "$SY"); SC=$(s SCORE "$SY")
+  byte 0 > "$O/lv.bin"; byte 1 > "$O/sd.bin"; printf '\231\231\220' > "$O/high.bin"      # BCD 99 99 90
+  for run in plain high; do
+    extra=""; [ $run = high ] && extra="-trap xpc=0x0$FR -trap-range 3-3 -trap-load $O/high.bin,format=raw,addr=0x0$SC"
+    emu c2 -load-fd0 "$B/PACFAN.DSK" -input-script "$WORK/start.txt" \
+      -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/lv.bin,format=raw,addr=0x0$LV" \
+      -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/sd.bin,format=raw,addr=0x0$BS" $extra \
+      -trap "seconds=45" -trap-ram "$O/$run.ram" -trap-timeout 1 -timeout 120 >/dev/null 2>&1 &
+  done
+  wait
+  python3 -I - "$O" "$SY" <<'PY' && say PASS "score: HUD matches the score after many changes, and rolls over past 999,999" || say FAIL "score: HUD or rollover"
+import sys
+o = sys.argv[1]
+S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(sys.argv[2]) if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
+ok = True
+for run in ('plain', 'high'):
+    d = open('%s/%s.ram' % (o, run), 'rb').read()
+    sc = d[S['SCORE']:S['SCORE'] + 3]
+    digits = [(sc[i // 2] >> (4 if i % 2 == 0 else 0)) & 15 for i in range(6)]
+    msgs = []
+    if any((b >> 4) > 9 or (b & 15) > 9 for b in sc): msgs.append('not valid BCD')
+    for name, base in (('BG', S['BG']), ('BUF0', S['BUF0']), ('BUF1', S['BUF1'])):
+        for k, g in enumerate(digits):
+            for row in range(5):
+                for j in range(2):
+                    want = d[S['FONT'] + g * 10 + row * 2 + j] | 0xC0
+                    if d[base + row * 32 + 2 * k + j] != want:
+                        msgs.append('%s digit %d (=%d) differs' % (name, k, g)); break
+                else: continue
+                break
+            else: continue
+    score = int(''.join(map(str, digits)))
+    if run == 'plain' and score == 0: msgs.append('no points scored in 45 s')
+    if run == 'high' and not (score < 20000 and score > 0): msgs.append('did not roll over: %06d' % score)
+    print('  %-5s run: score %06d on screen%s' % (run, score, ' -- ' + '; '.join(sorted(set(msgs))) if msgs else ', matches'))
+    ok &= not msgs
+sys.exit(0 if ok else 1)
+PY
+}
+
+# eyes: on every level, from every tile a ghost can be on, following the way-home map the
+# engine loaded (never into a wall, doors allowed) gets the eyes to the house tile.
+check_eyes() {
+  O=$D/eyes; rm -rf "${O:?}"; mkdir -p "$O"
+  WS=$(s WSPACE); LV=$(s LEVEL); FR=$(s FRAME); l=0
+  while [ $l -lt 40 ]; do
+    byte $l > "$O/lv$l.bin"
+    emu c2 -load-fd0 "$DSK" -input-script "$WORK/start.txt" \
+      -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/lv$l.bin,format=raw,addr=0x0$LV" \
+      -trap "xpc=0x0$FR" -trap-range 1-1 -trap-ram "$O/r$l.ram" -trap-timeout 0 -timeout 60 >/dev/null 2>&1 &
+    l=$((l + 1))
+  done
+  wait
+  python3 -I - "$O" "$SYM" <<'PY' && say PASS "eyes: from every tile of every level the way-home map leads home" || say FAIL "eyes: a way-home map is wrong"
+import sys
+o = sys.argv[1]
+S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(sys.argv[2]) if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
+D = [(1, 0), (-1, 0), (0, -1), (0, 1)]                  # right, left, up, down
+def step(c, r, d):
+    c = (c + D[d][0]) & 15; r += D[d][1]
+    return c, (14 if r < 0 else 0 if r > 14 else r)
+bad = []
+tiles = 0
+for l in range(40):
+    ram = open('%s/r%d.ram' % (o, l), 'rb').read()
+    mp = ram[S['MAP']:S['MAP'] + 240]
+    home = (ram[S['HOMEC']], ram[S['HOMER']])
+    hdr = ram[S['LVP'] and (ram[S['LVP']] * 256 + ram[S['LVP'] + 1]):][:21]
+    ptr = hdr[19] * 256 + hdr[20]
+    table = ram[ptr:ptr + 60]
+    seen, todo = {home}, [home]                           # every tile ghosts can reach from home
+    while todo:
+        c, r = todo.pop()
+        for d in range(4):
+            n = step(c, r, d)
+            if mp[n[1] * 16 + n[0]] != 1 and n not in seen: seen.add(n); todo.append(n)
+    for (c, r) in seen:
+        pos, ok = (c, r), False
+        for _ in range(300):
+            if pos == home: ok = True; break
+            i = pos[1] * 16 + pos[0]
+            d = (table[i >> 2] >> ((i & 3) * 2)) & 3
+            pos = step(pos[0], pos[1], d)
+            if mp[pos[1] * 16 + pos[0]] == 1: break
+        tiles += 1
+        if not ok: bad.append((l + 1, (c, r)))
+print('  %d tiles checked on 40 levels, %d failures%s' % (tiles, len(bad), (': ' + str(bad[:6])) if bad else ''))
+sys.exit(1 if bad else 0)
+PY
+}
+
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break fuzz speed lap overrun
+[ $# -gt 0 ] || set -- break fuzz speed lap title score eyes overrun protect
 for c in "$@"; do
-  case $c in break|fuzz|speed|lap|overrun) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
+  case $c in break|fuzz|speed|lap|title|score|eyes|overrun|protect) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done
 exit $FAILED
