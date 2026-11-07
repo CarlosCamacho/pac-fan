@@ -126,7 +126,10 @@ python3 tools/botdiff.py OLD_DIR OLD.sym NEW_DIR NEW.sym   # did an edit change 
   expects it to list and run; `fuzz` fills the variable area with
   different patterns at `START` and expects identical screens and state (title and autopilot
   play, CoCo 2 and 3); `speed` (CoCo 3, needs `coco3.rom`) starts at high speed and checks
-  normal speed is left alone and high speed comes back; `lap` forces a clear of level 40;
+  normal speed is left alone and high speed comes back; `tune` records the speaker output of
+  the intro tune and checks every note's pitch against the table within 2% (CoCo 2, CoCo 3, and
+  a CoCo 3 left at high speed; needs numpy); `sound` expects dot-eating to be audible in 8 s
+  of autopilot play; `lap` forces a clear of level 40;
   `title` presses UP/DOWN (wrapping both ways) and SPACE and expects that level; `score` plays
   45 s (and a run that starts at 999,990) and expects the score drawn in BG and both screens
   to equal the score, digit for digit; `eyes` follows the loaded way-home map from every tile
@@ -137,6 +140,12 @@ python3 tools/botdiff.py OLD_DIR OLD.sym NEW_DIR NEW.sym   # did an edit change 
   jump into data, or the stack more than 64 bytes below where BASIC left it. Each check was
   shown to FAIL on a build with the bug it guards against. `SYM=`, `DSK=`, `SRC=`, `LST=` point
   it at another build.
+- **Audio** can be recorded: `-audio-record-source mix` is what reaches the speaker (after the
+  PIA's sound-source select and enable bits, so it catches a game that runs but is silent);
+  `dac` is the raw DAC. `-trap-audio-start FILE` / `-trap-audio-stop` bracket a window.
+  `tools/tunecheck.py WAV tables.inc` compares each note's pitch with the table. The tune is
+  64 notes, 4.80 s, two sawtooth voices; measured worst error 0.25%, so the 79-cycle loop does
+  give 11,328 Hz. A loop two cycles slower gives 2.9% and fails.
 - **Protect mode** (`-protect-mode`) works only on the CoCo 3 memory path, which runs this
   code unchanged, so the `protect` check runs there (physical = `$70000` + logical).
   `tools/mksym.py LISTING SYM OUT BASE` makes its code map from the assembler listing:

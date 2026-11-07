@@ -14,6 +14,9 @@
 #            (title and autopilot play, CoCo 2 and 3)
 #   speed    CoCo 3 left at high speed (POKE 65497,0): the game runs at normal speed and
 #            high speed is back after BREAK. Also checks normal speed is left alone.
+#   tune     the speaker output of the intro tune is in tune (every note within 2%) on a CoCo 2,
+#            a CoCo 3 and a CoCo 3 left at high speed (needs numpy)
+#   sound    eating dots is audible
 #   lap      clearing level 40 goes round to level 1 at top speed
 #   title    UP/DOWN pick the starting level (wrapping both ways) and SPACE starts on it
 #   score    the score on screen equals the score after many updates, and rolls over past 999,999
@@ -432,9 +435,63 @@ PY
   done
 }
 
+# tune: the speaker output of the intro tune (the mix, after the sound-source select and enable
+# bits) is in tune: every note's pitch within 2% of the table (tools/tunecheck.py), on a CoCo 2,
+# a CoCo 3, and a CoCo 3 left at high speed. Needs numpy.
+check_tune() {
+  python3 -c 'import numpy' 2>/dev/null || { echo "SKIP tune (no numpy)"; return; }
+  O=$D/tune; rm -rf "${O:?}"; mkdir -p "$O"
+  SW=$(s SAWPLAY); SX=$(s SWX)
+  for sc in c2:normal c3:normal c3:fast; do
+    m=${sc%%:*}; v=${sc##*:}
+    [ $m = c3 ] && ! have3 && continue
+    P=$(px $m)
+    python3 -I - "$O/$m$v.txt" $v <<'PY'
+import sys
+pre = 'type POKE 65497,0\\r\nwait 500\n' if sys.argv[2] == 'fast' else ''
+open(sys.argv[1], 'w').write('wait 3000\n' + pre + 'type LOADM"PACFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\n')
+PY
+    emu $m -load-fd0 "$DSK" -input-script "$O/$m$v.txt" -audio-record-source mix \
+      -trap "xpc=0x$P$SW" -trap-range 1-1 -trap-audio-start "$O/$m$v.wav" \
+      -trap "xpc=0x$P$SX" -trap-range 1-1 -trap-audio-stop -trap "seconds=36" -trap-timeout 1 -timeout 80 >/dev/null 2>&1 &
+  done
+  wait
+  for sc in c2:normal c3:normal c3:fast; do
+    m=${sc%%:*}; v=${sc##*:}
+    [ -f "$O/$m$v.wav" ] || { [ $m = c3 ] && ! have3 && continue; say FAIL "tune: $m $v: no sound recorded"; continue; }
+    r=$(python3 "$HERE/tools/tunecheck.py" "$O/$m$v.wav" "$(dirname "$SRC")/tables.inc" 2>&1 | tail -n 1)
+    if python3 "$HERE/tools/tunecheck.py" "$O/$m$v.wav" "$(dirname "$SRC")/tables.inc" >/dev/null 2>&1; then say PASS "tune: $m $v: $r"; else say FAIL "tune: $m $v: $(echo "$r" | cut -c1-160)"; fi
+  done
+}
+
+# sound: eating dots makes sound (the waka): in 8 s of autopilot play, at least a quarter of the
+# 100 ms windows of the speaker mix are loud.
+check_sound() {
+  python3 -c 'import numpy' 2>/dev/null || { echo "SKIP sound (no numpy)"; return; }
+  O=$D/sound; rm -rf "${O:?}"; mkdir -p "$O"
+  botbuild || { say FAIL "sound: the autopilot build failed"; return; }
+  B=$D/bot; SY=$B/pacfan.sym; SX=$(s SWX "$SY"); WS=$(s WSPACE "$SY"); BS=$(s BSEED "$SY")
+  byte 1 > "$O/sd.bin"
+  emu c2 -load-fd0 "$B/PACFAN.DSK" -input-script "$WORK/start.txt" -audio-record-source mix \
+    -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/sd.bin,format=raw,addr=0x0$BS" \
+    -trap "xpc=0x0$SX" -trap-range 1-1 -trap-audio-start "$O/play.wav" \
+    -trap "seconds=24" -trap-audio-stop -trap-timeout 1 -timeout 60 >/dev/null 2>&1
+  python3 -I - "$O/play.wav" <<'PY' && say PASS "sound: eating dots is audible" || say FAIL "sound: eating dots is (nearly) silent"
+import sys, wave
+import numpy as np
+w = wave.open(sys.argv[1]); r = w.getframerate()
+x = np.frombuffer(w.readframes(w.getnframes()), dtype='<i2').astype(float); x -= np.median(x)
+win = int(0.1 * r); n = len(x) // win
+rms = np.array([np.sqrt((x[i * win:(i + 1) * win] ** 2).mean()) for i in range(n)])
+loud = (rms > 300).sum()
+print('  %.1f s of play: %d of %d windows loud (%.0f%%)' % (len(x) / r, loud, n, 100.0 * loud / max(n, 1)))
+sys.exit(0 if n >= 40 and loud >= 0.25 * n else 1)
+PY
+}
+
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break basic fuzz speed lap title score eyes overrun protect
+[ $# -gt 0 ] || set -- break basic fuzz speed tune sound lap title score eyes overrun protect
 for c in "$@"; do
-  case $c in break|basic|fuzz|speed|lap|title|score|eyes|overrun|protect) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
+  case $c in break|basic|fuzz|speed|tune|sound|lap|title|score|eyes|overrun|protect) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done
 exit $FAILED

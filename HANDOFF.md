@@ -115,6 +115,12 @@ commands: a typed program listed as garbage or would not run, because the game's
 BASIC's program area and had overwritten the empty-program marker. `QUIT` now restores it
 (`CLAUDE.md`, "BASIC after BREAK"); the `basic` check guards it on a CoCo 2 and a CoCo 3.
 
+Fourth pass, November 7: sound, never checked before. The intro tune was recorded from the speaker
+mix and every note's pitch measured against the table: worst error 0.25% on a CoCo 2, a CoCo 3,
+and a CoCo 3 left at high speed (which proves the speed guard by ear, not just by flag); eating
+dots is audible. No bug found. `tools/checks.sh tune` and `sound` guard it; a build with the DAC
+deselected, or the loop two cycles slower, fails them.
+
 ## How the session went, briefly
 
 1. Skills review, revised skill zips, audits of his repos, test disks.
