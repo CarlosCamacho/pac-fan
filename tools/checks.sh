@@ -1,6 +1,6 @@
 #!/bin/sh
-# Robustness checks on the built game. Run ./build.sh first (this uses dist/PACFAN.DSK and
-# dist/pacfan.sym), then:
+# Robustness checks on the built game. Run ./build.sh first (this uses dist/PAKFAN.DSK and
+# dist/pakfan.sym), then:
 #
 #   tools/checks.sh                  every check
 #   tools/checks.sh break fuzz       just those
@@ -33,7 +33,7 @@
 # and are skipped without it. Each check prints PASS or FAIL; the exit status is 1 on a FAIL.
 . "$(dirname "$0")/emu.sh"
 D=$WORK/checks; mkdir -p "$D"
-SYM=${SYM:-$HERE/dist/pacfan.sym}; DSK=${DSK:-$HERE/dist/PACFAN.DSK}; SRC=${SRC:-$HERE/pacfan.asm}
+SYM=${SYM:-$HERE/dist/pakfan.sym}; DSK=${DSK:-$HERE/dist/PAKFAN.DSK}; SRC=${SRC:-$HERE/pakfan.asm}
 LWASM=${LWASM:-lwasm}
 FAILED=0
 have3() { [ -f "$ROMS/coco3.rom" ]; }
@@ -53,7 +53,7 @@ check_break() {
   byte 0 > "$O/lv.bin"; byte 1 > "$O/die.bin"
   # 29 taps, 0 to 14 s after SPACE is released; a death is forced at the 90th frame
   for d in $(python3 -c "print(' '.join(str(int(x * 500)) for x in range(29)))"); do
-    printf 'wait 3000\ntype LOADM"PACFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait %s\nkey break down\nwait 300\nkey break up\nwait 2500\n' "$d" > "$O/in_$d.txt"
+    printf 'wait 3000\ntype LOADM"PAKFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait %s\nkey break down\nwait 300\nkey break up\nwait 2500\n' "$d" > "$O/in_$d.txt"
     emu c2 -load-fd0 "$DSK" -input-script "$O/in_$d.txt" \
       -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/lv.bin,format=raw,addr=0x0$LV" \
       -trap "xpc=0x0$FR" -trap-range 90-90 -trap-load "$O/die.bin,format=raw,addr=0x0$ST" \
@@ -68,7 +68,7 @@ check_break() {
     P=$(px $m)
     for st in tune:1000 flash:7000 ready:8800; do
       n=${st%%:*}; d=${st##*:}
-      printf 'wait 3000\ntype LOADM"PACFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait %s\nkey break down\nwait 300\nkey break up\nwait 1500\ntype PRINT 2+2\\r\nwait 800\ntype EXEC\\r\nwait 9000\n' "$d" > "$O/x_${m}_$n.txt"
+      printf 'wait 3000\ntype LOADM"PAKFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait %s\nkey break down\nwait 300\nkey break up\nwait 1500\ntype PRINT 2+2\\r\nwait 800\ntype EXEC\\r\nwait 9000\n' "$d" > "$O/x_${m}_$n.txt"
       emu $m -load-fd0 "$DSK" -input-script "$O/x_${m}_$n.txt" \
         -trap "xpc=0x$P$WS" -trap-range 1-1 -trap-load "$O/lv.bin,format=raw,addr=0x$P$LV" \
         -trap "xpc=0x$P$FR" -trap-range 90-90 -trap-load "$O/die.bin,format=raw,addr=0x$P$ST" \
@@ -89,8 +89,8 @@ check_break() {
 # the autopilot build (-DBOT=1), for a game that plays itself deterministically
 botbuild() {
   B=$D/bot; mkdir -p "$B"
-  "$LWASM" -9 -DBOT=1 --format=decb --list="$B/pacfan.lst" --symbol-dump="$B/pacfan.sym" -o "$B/PACFAN.BIN" "$SRC" || return 1
-  python3 "$HERE/mkdsk.py" "$B/PACFAN.DSK" "$B/PACFAN.BIN" >/dev/null
+  "$LWASM" -9 -DBOT=1 --format=decb --list="$B/pakfan.lst" --symbol-dump="$B/pakfan.sym" -o "$B/PAKFAN.BIN" "$SRC" || return 1
+  python3 "$HERE/mkdsk.py" "$B/PAKFAN.DSK" "$B/PAKFAN.BIN" >/dev/null
 }
 
 # fuzz NAME MACHINE BUILD(real|bot) SECONDS LEVEL SCOPE(screen|state): screen compares only
@@ -98,7 +98,7 @@ botbuild() {
 fuzz() {
   name=$1; m=$2; build=$3; secs=$4; lvl=$5; scope=$6
   O=$D/fuzz_$name; rm -rf "${O:?}"; mkdir -p "$O"
-  if [ $build = bot ]; then SY=$D/bot/pacfan.sym; DK=$D/bot/PACFAN.DSK; else SY=$SYM; DK=$DSK; fi
+  if [ $build = bot ]; then SY=$D/bot/pakfan.sym; DK=$D/bot/PAKFAN.DSK; else SY=$SYM; DK=$DSK; fi
   P=$(px $m); SA=$(s START "$SY"); WS=$(s WSPACE "$SY"); LV=$(s LEVEL "$SY"); V0=$(s SAVES0 "$SY"); VE=$(s ENDVARS "$SY"); BS=$(s BSEED "$SY")
   python3 -I - "$O" "$V0" "$VE" <<'PY'
 import sys, random
@@ -154,7 +154,7 @@ import sys
 o, v = sys.argv[1], sys.argv[2]
 loop = 'type TIMER=0:FOR I=1 TO 1500:NEXT:PRINT TIMER\\r\nwait 6000\n'
 pre = 'type POKE 65497,0\\r\nwait 500\n' if v == 'fast' else ''
-open('%s/%s.txt' % (o, v), 'w').write('wait 3000\n' + pre + loop + 'type LOADM"PACFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\nkey break down\nwait 300\nkey break up\nwait 1500\n' + loop + 'wait 2000\n')
+open('%s/%s.txt' % (o, v), 'w').write('wait 3000\n' + pre + loop + 'type LOADM"PAKFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\nkey break down\nwait 300\nkey break up\nwait 1500\n' + loop + 'wait 2000\n')
 PY
     emu c3 -load-fd0 "$DSK" -input-script "$O/$v.txt" -trap "xpc=0x7$Q" -trap-range 1-1 -trap-ram "$O/${v}_quit.ram" \
       -trap "seconds=70" -trap-ram "$O/${v}_end.ram" -trap-timeout 1 -timeout 120 >/dev/null 2>&1 &
@@ -199,13 +199,13 @@ PY
 
 check_overrun() {
   O=$D/overrun; rm -rf "${O:?}"; mkdir -p "$O"
-  "$LWASM" -9 -DOVR=1 --format=decb --symbol-dump="$O/pacfan.sym" -o "$O/PACFAN.BIN" "$SRC" || return 1
-  python3 "$HERE/mkdsk.py" "$O/PACFAN.DSK" "$O/PACFAN.BIN" >/dev/null
-  WS=$(s WSPACE "$O/pacfan.sym"); LV=$(s LEVEL "$O/pacfan.sym"); l=0
+  "$LWASM" -9 -DOVR=1 --format=decb --symbol-dump="$O/pakfan.sym" -o "$O/PAKFAN.BIN" "$SRC" || return 1
+  python3 "$HERE/mkdsk.py" "$O/PAKFAN.DSK" "$O/PAKFAN.BIN" >/dev/null
+  WS=$(s WSPACE "$O/pakfan.sym"); LV=$(s LEVEL "$O/pakfan.sym"); l=0
   while [ $l -lt 40 ]; do
     byte $l > "$O/lv$l.bin"
     python3 "$HERE/tools/keyplay.py" "$O/in$l.txt" $((l + 1)) 100
-    emu c2 -load-fd0 "$O/PACFAN.DSK" -input-script "$O/in$l.txt" \
+    emu c2 -load-fd0 "$O/PAKFAN.DSK" -input-script "$O/in$l.txt" \
       -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/lv$l.bin,format=raw,addr=0x0$LV" \
       -trap "seconds=114" -trap-ram "$O/r$l.ram" -trap-timeout 1 -timeout 160 >/dev/null 2>&1 &
     l=$((l + 1))
@@ -214,7 +214,7 @@ check_overrun() {
   python3 -I - "$O" <<'PY' && say PASS "overrun: frames past one field within budget" || say FAIL "overrun: too many frames run past one video field"
 import sys
 b = sys.argv[1]
-S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(b + '/pacfan.sym') if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
+S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(b + '/pakfan.sym') if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
 T = [0] * 128; X = [0] * 128
 for l in range(40):
     d = open('%s/r%d.ram' % (b, l), 'rb').read()
@@ -243,9 +243,9 @@ check_protect() {
   [ -f "$LST" ] || { say FAIL "protect: no listing at $LST (./build.sh writes it)"; return; }
   botbuild || { say FAIL "protect: the autopilot build failed"; return; }
   python3 "$HERE/tools/mksym.py" "$LST" "$SYM" "$O/real.gsym" 0x70000 >/dev/null || return 1
-  python3 "$HERE/tools/mksym.py" "$D/bot/pacfan.lst" "$D/bot/pacfan.sym" "$O/bot.gsym" 0x70000 >/dev/null || return 1
+  python3 "$HERE/tools/mksym.py" "$D/bot/pakfan.lst" "$D/bot/pakfan.sym" "$O/bot.gsym" 0x70000 >/dev/null || return 1
   for v in real bot; do
-    if [ $v = real ]; then SY=$SYM; DK=$DSK; else SY=$D/bot/pacfan.sym; DK=$D/bot/PACFAN.DSK; fi
+    if [ $v = real ]; then SY=$SYM; DK=$DSK; else SY=$D/bot/pakfan.sym; DK=$D/bot/PAKFAN.DSK; fi
     SA=$(s START "$SY"); WS=$(s WSPACE "$SY"); LV=$(s LEVEL "$SY"); BS=$(s BSEED "$SY")
     byte 1 > "$O/sd.bin"; l=0
     while [ $l -lt 40 ]; do
@@ -279,7 +279,7 @@ check_title() {
     python3 -I - "$O/in$n.txt" "${sc%%:*}" <<'PY'
 import sys
 out, keys = sys.argv[1], sys.argv[2].split(',')
-L = ['wait 3000', 'type LOADM"PACFAN":EXEC\\r', 'wait 8000']
+L = ['wait 3000', 'type LOADM"PAKFAN":EXEC\\r', 'wait 8000']
 for k in keys:
     L += ['key %s down' % k, 'wait 250', 'key %s up' % k, 'wait 250']
 open(out, 'w').write('\n'.join(L + ['key space down', 'wait 300', 'key space up', 'wait 4000']) + '\n')
@@ -312,12 +312,12 @@ PY
 check_score() {
   O=$D/score; rm -rf "${O:?}"; mkdir -p "$O"
   botbuild || { say FAIL "score: the autopilot build failed"; return; }
-  B=$D/bot; SY=$B/pacfan.sym
+  B=$D/bot; SY=$B/pakfan.sym
   WS=$(s WSPACE "$SY"); LV=$(s LEVEL "$SY"); BS=$(s BSEED "$SY"); FR=$(s FRAME "$SY"); SC=$(s SCORE "$SY")
   byte 0 > "$O/lv.bin"; byte 1 > "$O/sd.bin"; printf '\231\231\220' > "$O/high.bin"      # BCD 99 99 90
   for run in plain high; do
     extra=""; [ $run = high ] && extra="-trap xpc=0x0$FR -trap-range 3-3 -trap-load $O/high.bin,format=raw,addr=0x0$SC"
-    emu c2 -load-fd0 "$B/PACFAN.DSK" -input-script "$WORK/start.txt" \
+    emu c2 -load-fd0 "$B/PAKFAN.DSK" -input-script "$WORK/start.txt" \
       -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/lv.bin,format=raw,addr=0x0$LV" \
       -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/sd.bin,format=raw,addr=0x0$BS" $extra \
       -trap "seconds=45" -trap-ram "$O/$run.ram" -trap-timeout 1 -timeout 120 >/dev/null 2>&1 &
@@ -411,7 +411,7 @@ check_basic() {
   O=$D/basic; rm -rf "${O:?}"; mkdir -p "$O"
   python3 -I - "$O/in.txt" <<'PY'
 import sys
-L = ['wait 3000', 'type LOADM"PACFAN":EXEC\\r', 'wait 8000', 'key space down', 'wait 300', 'key space up', 'wait 12000',
+L = ['wait 3000', 'type LOADM"PAKFAN":EXEC\\r', 'wait 8000', 'key space down', 'wait 300', 'key space up', 'wait 12000',
      'key break down', 'wait 300', 'key break up', 'wait 1500',
      'type 10 PRINT "HELLO";2*21\\r', 'wait 500', 'type 20 FOR I=1 TO 3:PRINT I:NEXT\\r', 'wait 500', 'type RUN\\r', 'wait 3000']
 open(sys.argv[1], 'w').write('\n'.join(L) + '\n')
@@ -449,7 +449,7 @@ check_tune() {
     python3 -I - "$O/$m$v.txt" $v <<'PY'
 import sys
 pre = 'type POKE 65497,0\\r\nwait 500\n' if sys.argv[2] == 'fast' else ''
-open(sys.argv[1], 'w').write('wait 3000\n' + pre + 'type LOADM"PACFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\n')
+open(sys.argv[1], 'w').write('wait 3000\n' + pre + 'type LOADM"PAKFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\n')
 PY
     emu $m -load-fd0 "$DSK" -input-script "$O/$m$v.txt" -audio-record-source mix \
       -trap "xpc=0x$P$SW" -trap-range 1-1 -trap-audio-start "$O/$m$v.wav" \
@@ -470,9 +470,9 @@ check_sound() {
   python3 -c 'import numpy' 2>/dev/null || { echo "SKIP sound (no numpy)"; return; }
   O=$D/sound; rm -rf "${O:?}"; mkdir -p "$O"
   botbuild || { say FAIL "sound: the autopilot build failed"; return; }
-  B=$D/bot; SY=$B/pacfan.sym; SX=$(s SWX "$SY"); WS=$(s WSPACE "$SY"); BS=$(s BSEED "$SY")
+  B=$D/bot; SY=$B/pakfan.sym; SX=$(s SWX "$SY"); WS=$(s WSPACE "$SY"); BS=$(s BSEED "$SY")
   byte 1 > "$O/sd.bin"
-  emu c2 -load-fd0 "$B/PACFAN.DSK" -input-script "$WORK/start.txt" -audio-record-source mix \
+  emu c2 -load-fd0 "$B/PAKFAN.DSK" -input-script "$WORK/start.txt" -audio-record-source mix \
     -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/sd.bin,format=raw,addr=0x0$BS" \
     -trap "xpc=0x0$SX" -trap-range 1-1 -trap-audio-start "$O/play.wav" \
     -trap "seconds=24" -trap-audio-stop -trap-timeout 1 -timeout 60 >/dev/null 2>&1

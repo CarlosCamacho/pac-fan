@@ -15,7 +15,7 @@ if len(sys.argv) < 3:
 out, seed = sys.argv[1], int(sys.argv[2])
 secs = int(sys.argv[3]) if len(sys.argv) > 3 else 100
 rnd = random.Random(seed)
-lines = ['wait 3000', 'type LOADM"PACFAN":EXEC\\r', 'wait 8000', 'key space down', 'wait 300', 'key space up']
+lines = ['wait 3000', 'type LOADM"PAKFAN":EXEC\\r', 'wait 8000', 'key space down', 'wait 300', 'key space up']
 t = 0
 while t < secs * 1000:
     d = rnd.choice(['up', 'down', 'left', 'right'])

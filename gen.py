@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate tables.inc for PAC-FAN (SG12 maze chase).  python3 gen.py
+"""Generate tables.inc for PAK FAN (SG12 maze chase).  python3 gen.py
 
 SG12: 64x96 elements, 32 bytes a row, each byte two elements (left $0A, right $05,
 both pairs written) and one colour: $80 | colour<<4 | bits.
@@ -297,7 +297,7 @@ text("TPRESS", "PRESS SPACE")
 text("TBLANK", "           ")
 text("TCAMCO", "CAMCO")
 text("TPRES", "PRESENTS")
-text("TTITLE", "PAC-FAN")
+text("TTITLE", "PAK FAN")
 text("TSPACE", "PRESS SPACE")
 text("TPROG", "PROGRAMMING BY")
 text("TNAME1", "CARLOS A.")
@@ -308,7 +308,7 @@ text("TLEVEL", "LEVEL 01")
 # ---- music: an original two-voice tune for the sawtooth engine (not from any game).
 # The engine runs one sample every SAMPCYC cycles; each record is a sample count, then
 # f1, f2 (phase steps). A count of 0 ends the tune.
-SAMPCYC = 79                       # counted from the SAWPLAY loop in pacfan.asm
+SAMPCYC = 79                       # counted from the SAWPLAY loop in pakfan.asm
 RATE = 894886 / SAMPCYC
 def hz(n):
     if n is None: return 0

@@ -1,7 +1,7 @@
 # Handoff from the earlier chat session (October 2026)
 
 This file carries a long earlier working session over to this repository. `CLAUDE.md` covers
-how to work on Pac-Fan itself; this file covers who the owner is, what else was built, the
+how to work on PAK FAN itself; this file covers who the owner is, what else was built, the
 tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kept current.
 
 ## The owner
@@ -12,7 +12,7 @@ tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kep
   offer it as an option.
 - **Never reproduce copyrighted or trademarked material.** No Pac-Man name, logo or Namco
   attract screen; no Namco music. Requests for those were declined, and he renamed the game
-  Pac-Fan. The intro tune and all art are original.
+  PAK FAN. The intro tune and all art are original.
 - When a **skill** he has already been given changes, **bump its version number**. He noticed
   once when this was missed.
 - Commit and push finished work. Report what was tested and where. **Nothing here has run on
@@ -23,11 +23,11 @@ tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kep
 
 | What | Where | State |
 |---|---|---|
-| **Pac-Fan** (SG12 maze game, CoCo 1/2) | this repo | 40 levels, played in order easiest to hardest; see `CLAUDE.md` |
+| **PAK FAN** (SG12 maze game, CoCo 1/2) | this repo | 40 levels, played in order easiest to hardest; see `CLAUDE.md` |
 | Maze editor (HTML) | `editor/maze-editor.html`; also published as a web artifact | Saves project JSON; the owner designs levels in it |
 | **SGTEST** (SG8/12/24 test cards, CoCo 2 and 3) | `assets/sgtest/` inside the **coco-hardware** skill (v3.26) | Done; results below |
-| GHOSTS demo (the stack-blast SG12 technique Pac-Fan grew from) | not in a repo; `ghosts-src.zip` was delivered in chat | Done |
-| Early SG12 Pac-Man prototype `pac12` | superseded by Pac-Fan | — |
+| GHOSTS demo (the stack-blast SG12 technique PAK FAN grew from) | not in a repo; `ghosts-src.zip` was delivered in chat | Done |
+| Early SG12 Pac-Man prototype `pac12` | superseded by PAK FAN | — |
 | CoCo **skills** (16 of them) | installed on his account; delivered as zips | See versions below |
 | **Audits** of his CoCo repos (20 of them: Beast in the Shadow, dk, GEM/9, 1942-coco3, Invaders-S24, Wulfenstein3D-24, CoCoTosh, CoCo Baseball 2, Kabomb, Balloon Fighter, Speed Bots, CoCoVille, Crypt Quest, Gataga, Insecta, Planet Miners, SEUCK-CoCo3, EmEsDOS09, CoCo-C-Studio, Wulfenstein 3D) | delivered in chat as `AUDIT-<repo>.md` | Done; each game is worked on in its own session |
 | SKILLTST.DSK (hardware test programs for the skills) | delivered in chat | Results folded into the skills |
@@ -62,7 +62,7 @@ complete skill as a zip.
     there, so judge tearing from default whole-frame shots.
   - Input-script key names are lower case: `key space down`, `key break up`, `key up down`.
   - Repeated identical trap conditions are unreliable; prefer `seconds=` traps.
-- Pac-Fan's own scripts wrap all of this: `tools/checkbg.sh`, `tools/botgames.sh`,
+- PAK FAN's own scripts wrap all of this: `tools/checkbg.sh`, `tools/botgames.sh`,
   `tools/rank.py`.
 
 ## Findings worth keeping
@@ -76,7 +76,7 @@ complete skill as a zip.
   - The display always fills 192 scanlines.
   - Graphics blocks only, no text.
   - Recorded in coco-hardware 3.26, `mc6847-machine-variants.md` §2a.
-  - Pac-Fan is all blocks, so it is a candidate to run on a CoCo 3 with `$FF9C` = 9. Not tried.
+  - PAK FAN is all blocks, so it is a candidate to run on a CoCo 3 with `$FF9C` = 9. Not tried.
 - **Difficulty measurement**: an autopilot in the real game (`-DBOT=1`), 10 games a level,
   ranked by deaths per 100 dots eaten. The ends of the ranking are firm; the middle is within
   noise.
@@ -124,7 +124,7 @@ deselected, or the loop two cycles slower, fails them.
 ## How the session went, briefly
 
 1. Skills review, revised skill zips, audits of his repos, test disks.
-2. The GHOSTS stack-blast SG12 demo, then an SG12 Pac-Man, renamed Pac-Fan: splash and title,
+2. The GHOSTS stack-blast SG12 demo, then an SG12 Pac-Man, renamed PAK FAN: splash and title,
    sawtooth DAC music, arcade ghost AI, tunnels, waka sound, title-screen chase.
 3. The maze editor (HTML artifact). He designed 25, then 40 levels in it.
 4. The engine for his levels: house and door, vertical tunnels, solid walls, per-level colour,

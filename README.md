@@ -1,9 +1,9 @@
-# PAC-FAN — a maze-chase game for CoCo 1/2/3 Semigraphics 12
+# PAK FAN — a maze-chase game for CoCo 1/2/3 Semigraphics 12
 
 A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos A. Camacho
 (CAMCO). An unofficial fan game; not affiliated with or endorsed by the owners of Pac-Man.
 
-    LOADM"PACFAN":EXEC      arrow keys move, SPACE starts, BREAK returns to BASIC
+    LOADM"PAKFAN":EXEC      arrow keys move, SPACE starts, BREAK returns to BASIC
                             from anywhere (title, tune, play, flash), UP/DOWN pick the
                             starting level (1-40) on the title
 
@@ -70,7 +70,7 @@ four minutes of random play: average 6,285 cycles of work per 14,915-cycle field
 7 gameplay frames ran 2-23% over (a dropped frame each), all at eat/redraw moments.
 Not yet run on hardware.
 
-Build: `LWASM=/path/to/lwasm ./build.sh` → `dist/PACFAN.DSK`.
+Build: `LWASM=/path/to/lwasm ./build.sh` → `dist/PAKFAN.DSK`.
 
 ## Levels and the maze editor
 

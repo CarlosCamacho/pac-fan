@@ -1,4 +1,4 @@
-<title>Pac-Fan Maze Editor</title>
+<title>PAK FAN Maze Editor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -114,8 +114,8 @@ textarea#jsonOut { width: 100%; box-sizing: border-box; height: 120px; backgroun
 
 <div class="app">
   <header class="bar">
-    <div class="brand">PAC-FAN <small>maze editor</small></div>
-    <input id="projName" aria-label="Project name" value="Pac-Fan levels">
+    <div class="brand">PAK FAN <small>maze editor</small></div>
+    <input id="projName" aria-label="Project name" value="PAK FAN levels">
     <span id="status" class="status">Example project</span>
     <span class="spacer"></span>
     <button id="btnNew" type="button">New project</button>
@@ -234,7 +234,7 @@ const TOOLS = [
 const BRUSHES = [ { id: "free", label: "Freehand", key: "f" }, { id: "rect", label: "Rectangle", key: "r" }, { id: "fill", label: "Fill", key: "g" } ];
 const solidish = (c) => c === "#" || c === "B";
 
-// The maze in the current game (Pac-Fan v3), as the example level.
+// The maze in the current game (PAK FAN v3), as the example level.
 const GAME_LEVEL = {
   name: "Level 1 (current game)", w: 16, h: 15, wallColor: 2,
   rows: [
@@ -262,7 +262,7 @@ function normLevel(l) {
   const colors = Array.from({ length: h }, (_, y) => ((l.colors && l.colors[y]) || "").padEnd(w, "-").slice(0, w));
   return { name: l.name || "Level", w, h, wallColor: Number.isInteger(l.wallColor) ? l.wallColor : 2, rows, colors };
 }
-function newProject(name) { return { format: "pacfan-project", version: 1, name: name || "Pac-Fan levels", levels: [normLevel(GAME_LEVEL)] }; }
+function newProject(name) { return { format: "pacfan-project", version: 1, name: name || "PAK FAN levels", levels: [normLevel(GAME_LEVEL)] }; }
 function blankLevel(n, w = 16, h = 15) {
   const rows = Array.from({ length: h }, (_, y) => (y === 0 || y === h - 1) ? "#".repeat(w) : "#" + " ".repeat(w - 2) + "#");
   return { name: "Level " + n, w, h, wallColor: 2, rows, colors: blankColors(w, h) };
@@ -675,7 +675,7 @@ document.addEventListener("keydown", (e) => {
 
 /* ---------------------------------------------------------------- open / save */
 function loadProjectObject(obj, id) {
-  if (!obj || obj.format !== "pacfan-project" || !Array.isArray(obj.levels) || !obj.levels.length) throw new Error("That file isn't a Pac-Fan project.");
+  if (!obj || obj.format !== "pacfan-project" || !Array.isArray(obj.levels) || !obj.levels.length) throw new Error("That file isn't a PAK FAN project.");
   S.project = { format: "pacfan-project", version: 1, name: obj.name || "Untitled project", levels: obj.levels.map(normLevel) };
   S.cur = 0; S.undo = []; S.redo = []; S.projectId = id || null; setDirty(!id); refreshAll();
 }

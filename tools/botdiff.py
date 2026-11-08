@@ -7,10 +7,10 @@ clear or game over), score, lives, level, dots, ghosts and map. Variables move w
 added, so each side is read with its own symbol file.
 
     tools/botgames.sh 10                                  # before the edit
-    cp -r dist/test/bot /tmp/base; cp dist/bot/pacfan.sym /tmp/base.sym
+    cp -r dist/test/bot /tmp/base; cp dist/bot/pakfan.sym /tmp/base.sym
     ...edit...
     tools/botgames.sh 10                                  # after
-    python3 tools/botdiff.py /tmp/base /tmp/base.sym dist/test/bot dist/bot/pacfan.sym
+    python3 tools/botdiff.py /tmp/base /tmp/base.sym dist/test/bot dist/bot/pakfan.sym
 
 No symbols for the "before" build any more? Build the old source from git into a scratch
 folder (with tables.inc and drawspr.inc beside it) with `lwasm -9 -DBOT=1 --symbol-dump=`.

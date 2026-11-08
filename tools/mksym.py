@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Code map for xroar-dev's -protect-mode, from the assembler listing.
 
-    python3 tools/mksym.py dist/pacfan.lst dist/pacfan.sym OUT.gsym [BASE]
+    python3 tools/mksym.py dist/pakfan.lst dist/pakfan.sym OUT.gsym [BASE]
 
 Bytes emitted by instructions are code, bytes emitted by fcb/fdb/fcc tables are initialized
 data (`rmb` emits nothing, so variables, buffers and the stack stay unclassified). BASE is
@@ -62,7 +62,7 @@ with open(out, 'w') as f:
         p = line.split()
         if len(p) >= 3 and p[1] == 'EQU' and p[2].startswith('$'):
             v = int(p[2][1:], 16)
-            f.write('S %s PACFAN %04X %X\n' % (p[0], v & 0xFFFF, v + base))
+            f.write('S %s PAKFAN %04X %X\n' % (p[0], v & 0xFFFF, v + base))
     for lo, hi in merge(code):
         f.write('M C %X %X\n' % (lo + base, hi + base))
     for lo, hi in merge(data):

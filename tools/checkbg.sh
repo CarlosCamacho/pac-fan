@@ -8,7 +8,7 @@ WS=$(sym WSPACE); LV=$(sym LEVEL); FR=$(sym FRAME)
 i=0
 while [ $i -lt $N ]; do
   printf "\\$(printf %03o $i)" > "$WORK/lv$i.bin"
-  coco -load-fd0 "$HERE/dist/PACFAN.DSK" -input-script "$WORK/start.txt" \
+  coco -load-fd0 "$HERE/dist/PAKFAN.DSK" -input-script "$WORK/start.txt" \
     -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$WORK/lv$i.bin,format=raw,addr=0x$LV" \
     -trap "xpc=0x0$FR" -trap-range 1-1 -trap-ram "$WORK/bg$i.ram" -trap-screenshot "$WORK/shot${i}_.png" \
     -trap-timeout 1 >/dev/null 2>&1 &

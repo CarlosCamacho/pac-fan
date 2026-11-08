@@ -8,7 +8,7 @@ Measure: deaths per 100 dots eaten over all games of a level (fewer clears break
 import glob, json, os, random, sys
 here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sym = {l.split()[0]: int(l.split()[-1].strip("$"), 16)
-       for l in open(os.path.join(here, "dist", "bot", "pacfan.sym")) if " EQU " in l}
+       for l in open(os.path.join(here, "dist", "bot", "pakfan.sym")) if " EQU " in l}
 res = {}
 for f in glob.glob(os.path.join(here, "dist", "test", "bot", "end_*.ram")):
     _, L, sd, kind = os.path.basename(f)[:-4].split("_")

@@ -1,4 +1,4 @@
-* PAC-FAN -- a maze-chase game in CoCo 1/2 Semigraphics 12 (64x96 elements, 8 colours)
+* PAK FAN -- a maze-chase game in CoCo 1/2 Semigraphics 12 (64x96 elements, 8 colours)
 *
 * Technique (from the GHOSTS demo):
 *   - everything shape-related is a pre-built table: the background screen, the maze map,
@@ -11,7 +11,7 @@
 *
 * Controls: arrow keys. SPACE starts. BREAK returns to BASIC.
 * Needs a 32K CoCo 1, 2 or 3. A CoCo 3 gets SG12 from its GIME through $FF9C = 9 (found
-* with SGTEST; tried in XRoar and xroar-dev, not on hardware). Load: LOADM"PACFAN":EXEC
+* with SGTEST; tried in XRoar and xroar-dev, not on hardware). Load: LOADM"PAKFAN":EXEC
 *
 * Memory: $0E00 BUF0, $1A00 BUF1, $2600 BG (background copy), code from $3200.
 
