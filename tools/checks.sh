@@ -347,6 +347,33 @@ sys.exit(0 if got == (1, 2, 5, 0, 0) else 1)
 PY
 }
 
+# orch: with SOUND set to ORCH90 the sound must leave by the Orchestra-90's DACs, not the 6-bit one (a missing
+# direct-page prefix once left the engine in DAC mode and nobody heard the difference): silent with no cartridge
+# in the Multi-Pak, the start music right with it.
+check_orch() {
+  python3 -c 'import numpy' 2>/dev/null || { echo "SKIP orch (no numpy)"; return; }
+  O=$D/orch; rm -rf "${O:?}"; mkdir -p "$O"
+  SB=$(s STARTMUS); MO=$(s MSGOFF)
+  printf 'wait 3000\ntype LOADM"PAKFAN":EXEC\\r\nwait 7000\nkey down down\nwait 200\nkey down up\nwait 400\nkey down down\nwait 200\nkey down up\nwait 400\nkey right down\nwait 200\nkey right up\nwait 800\nkey up down\nwait 200\nkey up up\nwait 400\nkey up down\nwait 200\nkey up up\nwait 600\nkey space down\nwait 300\nkey space up\nwait 9000\n' > "$O/in.txt"
+  for v in none cart; do
+    x=""; [ $v = cart ] && x="-cart mpi -mpi-load-cart rsdos -mpi-load-cart orch90 -mpi-slot 0"
+    emu c2 $x -load-fd0 "$DSK" -input-script "$O/in.txt" -audio-record-source mix \
+      -trap "xpc=0x0$SB" -trap-range 1-1 -trap-audio-start "$O/$v.wav" \
+      -trap "xpc=0x0$MO" -trap-range 1-1 -trap-audio-stop -trap "seconds=30" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
+  done
+  wait
+  r=$(python3 -I - "$O/none.wav" <<'PY'
+import sys, wave
+import numpy as np
+w = wave.open(sys.argv[1]); d = np.frombuffer(w.readframes(w.getnframes()), dtype='<i2').astype(float)
+print('%.0f' % d.std())
+PY
+)
+  if [ -n "$r" ] && [ "$r" -lt 50 ] && python3 "$HERE/tools/audiocheck.py" "$O/cart.wav" "$HERE/assets/audio/synth/snd00.bin" >/dev/null 2>&1; then
+    say PASS "orch: ORCH90 is silent without the cartridge (rms $r) and plays the start music right with it"
+  else say FAIL "orch: without the cartridge rms=${r:-none} (want < 50); with it: $(python3 "$HERE/tools/audiocheck.py" "$O/cart.wav" "$HERE/assets/audio/synth/snd00.bin" 2>&1 | tail -n 1)"; fi
+}
+
 # menu: UP/DOWN pick a row (PLAY starts the game at level 1), LEFT/RIGHT change CONTROL (keyboard/joystick) and SOUND (DAC, Orchestra-90, OFF,
 # wrapping both ways), ENTER on ABOUT shows the story (any key turns the pages, then back at the menu).
 check_menu() {
@@ -600,8 +627,8 @@ PY
 }
 
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break basic fuzz speed tune sound lap menu joy score eyes overrun protect loader
+[ $# -gt 0 ] || set -- break basic fuzz speed tune orch sound lap menu joy score eyes overrun protect loader
 for c in "$@"; do
-  case $c in break|basic|fuzz|speed|tune|sound|lap|menu|joy|score|eyes|overrun|protect|loader) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
+  case $c in break|basic|fuzz|speed|tune|orch|sound|lap|menu|joy|score|eyes|overrun|protect|loader) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done
 exit $FAILED

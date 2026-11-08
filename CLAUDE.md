@@ -126,7 +126,10 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
   choice: `HAVEAUD` (the wrappers and `WAITV0` test it) is `ENGINE` and not OFF, and the engine's
   `A_SETMODE` ($8010) takes 0 for the DAC, 1 for Orchestra-90.
 - Orchestra-90: a second sample loop (`SLO`) writes `$FF7A` and `$FF7B` (both DACs, `$80` centre),
-  116 cycles a sample, and `TICK` stretches every phase step by 116/111, so the pitch stays. Tested in
+  116 cycles a sample, and `TICK` stretches every phase step by 116/111, so the pitch stays. It uses a
+  second set of wave tables (`wavetbl8.bin`, every 8-bit step instead of multiples of 4), so its
+  quantization noise is a quarter of the DAC's; the rest of the noise (8 kHz, 32-point tables without
+  interpolation, 60 Hz volume steps, the chopping of idle-time sounds) is the same in both. Tested in
   xroar-dev with `-cart mpi -mpi-load-cart rsdos -mpi-load-cart orch90`: 246 of 246 start-music
   ticks right.
 - ABOUT (`A_ABOUT`, engine, $800D; A = 1 on a CoCo 3): SG24 at `$0E00` (the two screen buffers), the
@@ -136,7 +139,8 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
   with a blank line between), made into pages by `tools/mkabout.py` (run by `build.sh`). The glyphs are
   `font3x5.py`, shared with `gen.py`. Without the engine (32K, or no sound pack) ABOUT does nothing.
 - Every move plays the bounce (sound 9). Checks: `menu` (CONTROL, SOUND wrapping, ABOUT through to PLAY)
-  and `joy` (a scripted stick, `-joy-right script`, moves the menu and the player).
+  and `joy` (a scripted stick, `-joy-right script`, moves the menu and the player); `orch` (ORCH90 is silent
+  with no cartridge in the Multi-Pak and right with one).
 
 ## Audio engine (audio.asm, assets/audio/, tools/mksynth.py)
 
@@ -256,6 +260,11 @@ python3 tools/botdiff.py OLD_DIR OLD.sym NEW_DIR NEW.sym   # did an edit change 
   not on a CoCo 2); `checks.sh speed` toggles once (`TOGGLE.BIN`) before its first measurement.
 - A CoCo 3 copies BASIC's ROM into the upper RAM at start-up, so anything put there for a test must
   go in after boot.
+- **Direct page in `audio.asm`**: `setdp $FD` makes lwasm use direct addressing for every `$FDxx`
+  variable, but the entry points `A_SETMODE` and `A_PLAY` ($FF, $FE) run with the game's DP (0), so there they
+  must say `>` (extended). A missing `>` wrote `AMODE` into `$0048` and the engine never left DAC mode (found
+  from a user report that ORCH90 sounded like the DAC); `$FF` cleared `$001A`, `$001B` and `$0020` (BASIC's
+  TXTTAB and VARTAB). `checks.sh orch` guards it.
 - The audio engine keeps its variables in the page `$FD00` (not `$FE00`: a CoCo 3 keeps its interrupt vectors there), with DP set to `$FD` while it runs
   (it restores DP). It saves A, X, Y, U; nothing else in the game needs to.
 

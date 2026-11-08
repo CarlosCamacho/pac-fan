@@ -62,6 +62,7 @@ GROW    equ     $FD52
 TMPD    equ     $FD54
 TMPE    equ     $FD56
 LNP     equ     $FD58
+TBLBASE equ     $FD5A
 FOOTBUF equ     $FD60
 
 A_INIT  ldx     #$FD00
@@ -69,6 +70,8 @@ A_INIT  ldx     #$FD00
 AI1     sta     ,x+
         cmpx    #$FE00
         bne     AI1
+        ldx     #WAVETBL        ; the DAC's tables to begin with
+        stx     >TBLBASE
         rts
 
 * A_PLAY
@@ -78,9 +81,9 @@ A_PLAY  cmpa    #$FE
         rts
 AP1     cmpa    #$FF
         bne     AP2
-        clr     ACNT
-        clr     ACNT+1
-        clr     AID
+        clr     >ACNT           ; (DP is the game's here: the variables need extended addressing)
+        clr     >ACNT+1
+        clr     >AID
         rts
 AP2     pshs    a,x,y,u,dp
         ldb     #DPV
@@ -289,7 +292,7 @@ TK6     ldd     ,x
         rorb
         lsra
         rorb
-        addd    #WAVETBL
+        addd    <TBLBASE
         std     ,u++
         leax    3,x
         dec     <CNT
@@ -343,7 +346,12 @@ CP1     lda     ,x+
 
 * A_SETMODE: B = 0 DAC, 1 Orchestra-90
 A_SETMODE
-        stb     AMODE
+        stb     >AMODE          ; (the caller's DP is not ours: extended)
+        ldx     #WAVETBL        ; the 6-bit DAC's tables, or the Orchestra-90's finer ones
+        tstb
+        beq     ASM1
+        ldx     #WAVETBL8
+ASM1    stx     >TBLBASE
         rts
 
 * A_ABOUT: the story in SG24 (the screen at $0E00, which is the game's two buffers), a page at a time.
@@ -553,4 +561,5 @@ ABTFONT includebin "assets/audio/synth/about_font.bin"
 ABTPAGES includebin "assets/audio/synth/about_pages.bin"
 
 WAVETBL includebin "assets/audio/synth/wavetbl.bin"
+WAVETBL8 includebin "assets/audio/synth/wavetbl8.bin"
         include "assets/audio/synth/audio_data.inc"

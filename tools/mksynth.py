@@ -96,7 +96,7 @@ def osc_peak(B, kind):
     return float(np.max(np.abs(B.oscillator(ph, kind)))) if kind != 'noise' else 0.6
 
 
-def wave_tables(B):
+def wave_tables(B, fine=False):
     """9 waves of 32 samples (unit peak), mapped to signed bytes for every volume: (wave<<4 | vol) * 32 bytes."""
     xs = np.linspace(0, 2 * np.pi, 32, endpoint=False)
     waves = [B.oscillator(xs, n) for n in WAVES]
@@ -111,7 +111,10 @@ def wave_tables(B):
         wave = wave / np.max(np.abs(wave))
         for vol in range(16):
             for i in range(32):
-                v = int(round(wave[i] * 64 * vol / 15 / 4)) * 4          # a multiple of 4, -64 .. 64
+                if fine:                                                 # Orchestra-90: 8 bits, every step
+                    v = int(round(wave[i] * 64 * vol / 15))
+                else:
+                    v = int(round(wave[i] * 64 * vol / 15 / 4)) * 4      # the 6-bit DAC: a multiple of 4, -64 .. 64
                 tbl[(w << 4 | vol) * 32 + i] = v & 255
     return bytes(tbl)
 
@@ -197,6 +200,7 @@ def main():
     B = load_designs()
     os.makedirs(OUT, exist_ok=True)
     open(os.path.join(OUT, 'wavetbl.bin'), 'wb').write(wave_tables(B))
+    open(os.path.join(OUT, 'wavetbl8.bin'), 'wb').write(wave_tables(B, True))
     lines = ['; made by tools/mksynth.py from assets/audio/build_audio.py: do not edit', '']
     dirl = ['SNDDIR']
     total = 0
