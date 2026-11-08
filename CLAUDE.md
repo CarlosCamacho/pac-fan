@@ -149,8 +149,7 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
 - A `LOADM` cannot write above `$8000` (in ROM mode there is no RAM there to write), so `RUN"PAKFAN"`
   loads the engine in 12 pieces (`AUD01-12.BIN`, each with `copier.asm`, 2000 bytes at `$3200`) and `EXEC`s
   the copier after each, which goes to all-RAM mode, copies up and comes back. The game's own pieces
-  load after, over the staging area. `TAUDIO.BIN` (the whole engine in one file) and `TOGGLE.BIN`
-  are for tests. On a CoCo 3, BASIC copies its ROM into the upper RAM at start-up, so a test
+  load after, over the staging area. `TOGGLE.BIN` is for a test. On a CoCo 3, BASIC copies its ROM into the upper RAM at start-up, so a test
   puts the engine in after that (`-trap xpc=START -trap-load ... addr=0x78000`); on a CoCo 1/2
   `-load-ram dist/AUDIO.RAW,addr=0x8000` is enough. Both are done by `tools/emu.sh` and `checks.sh`.
 - Engine: jump table at `$8004` (init), `$8007` (`A_SLICE`), `$800A` (`A_PLAY`: id in A), `$800D` (`A_ABOUT`), `$8010` (`A_SETMODE`). Ids 0-4 play
@@ -168,7 +167,7 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
   Voices: the long sounds use all three, effects voices 1 and 2, the loops 0 and 1, so an effect
   replaces the loop's voice 1 while it sounds. Pitch comes from `LOOP_CYCLES` in `mksynth.py`;
   `tools/checks.sh tune` checks it.
-- The copier is at `$7000` (so that `TAUDIO.BIN`, the whole engine in one test file, fits under it).
+- The copier is at `$7000`, above the game.
 - Ambient: `AMBIENT` (once a frame) picks eyes, else frightened, else the siren by dots eaten
   (`DOTSTEP` = a fifth of the maze's dots). `CURAMB` is the loop now playing.
 - Extra life: `ADDSCORE` adds one (to 9) when the score first reaches 10,000.
@@ -282,7 +281,7 @@ python3 tools/botdiff.py OLD_DIR OLD.sym NEW_DIR NEW.sym   # did an edit change 
   `PAKLOGO.BIN` (the SG24 loading screen from `assets/pakfan-logo.bin`, 6144 bytes at `$0E00-$25FF`),
   `AUD01..AUD12.BIN` (the audio engine, 2000 bytes a file, each with `copier.asm`) and
   `PAK01..PAK10.BIN` (the game in ten pieces) next to the unchanged `PAKFAN.BIN`, and builds
-  `PAKFAN.DSK` with all of them (and `TAUDIO.BIN`, `TOGGLE.BIN` for the tests; `dist/AUDIO.RAW` for `-load-ram`).
+  `PAKFAN.DSK` with all of them (and `TOGGLE.BIN` for a test; `dist/AUDIO.RAW` for `-load-ram`).
   `RUN"PAKFAN"` shows the logo, loads the engine (a `LOADM` and an `EXEC` of the copier for each file),
   then the game, filling a progress bar after each of the 22 files, then EXECs the game; `START`
   switches to SG12 and `FILL3` clears the logo into the title.

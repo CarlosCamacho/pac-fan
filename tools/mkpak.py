@@ -130,9 +130,6 @@ def main():
     # test only: SAM map type to all-RAM and back, nothing else. xroar-dev's CoCo 3 runs BASIC about
     # 1.7 times faster after that, so tools/checks.sh speed does it before its first measurement too.
     files.append(('TOGGLE.BIN', make_bin(0x6E00, bytes([0x1A, 0x50, 0xB7, 0xFF, 0xDF, 0xB7, 0xFF, 0xDE, 0x1C, 0xAF, 0x39]), 0x6E00)))
-    # test only: the whole engine in one file, so a test loads it in a moment (LOADM"TAUDIO":EXEC)
-    assert 0x0E00 + len(apayload) < cblocks[0][0]
-    files.append(('TAUDIO.BIN', make_blocks([(0x0E00, apayload), copier(0x0E00, aaddr, len(apayload))], cexec)))
     size = -(-len(payload) // PIECES)
     for i in range(PIECES):
         part = payload[i * size:(i + 1) * size]

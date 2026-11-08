@@ -1,3 +1,11 @@
-THE STORY GOES HERE. PASTE IT INTO THIS FILE, ONE PARAGRAPH AFTER ANOTHER (A BLANK LINE BETWEEN PARAGRAPHS), AND RUN ./BUILD.SH: THE BUILD WRAPS IT TO 16 LETTERS A LINE AND CUTS IT INTO PAGES OF 14 LINES.
+The year is 1984, and a totally bogus tragedy is unfolding at the local mall. The neighborhood Radio Shack is closing its doors forever, and management has ordered every unsold TRS-80 Color Computer Program Pak to be tossed into the city dump!
 
-ANY KEY OR THE FIRE BUTTON TURNS THE PAGE. AFTER THE LAST PAGE YOU ARE BACK AT THE MENU.
+You can't let those pristine CoCo masterpieces become landfill fodder. Armed with your trusty CoCo and a 300-baud modem, you've remotely hijacked a prototype Robie Sr robot trapped inside the store. Your mission is clear: steer your mechanized avatar through the maze of display racks and hoard every last Program Pak before the garbage trucks arrive at dawn.
+
+But navigating the electronics aisle won't be a breeze - the store is haunted by the restless ghosts of overzealous Radio Shack salesmen! These Spectral Associates will relentlessly chase your bot, desperate to ask for your zip code and aggressively pitch the Battery-of-the-Month club.
+
+To survive the night, you must gobble up every Pak in sight. If the phantom workforce corners you, grab a stray heavy-duty Enercell battery for a temporary power surge - then turn the tables and chase those polyester-clad ghouls right back to the stockroom!
+
+Boot up, lock in, and save the software.
+
+Are you a true CoCoNut?
