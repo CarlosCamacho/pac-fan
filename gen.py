@@ -255,30 +255,8 @@ for i, n in enumerate(names):
 out.append("SPRSZ   equ     72")
 
 # ---- font: 3x5 glyphs in 4-element cells -> 5 rows x 2 bytes of pair bits (no colour)
-FONT = {
- "0": ["XXX", "X.X", "X.X", "X.X", "XXX"], "1": [".X.", "XX.", ".X.", ".X.", "XXX"],
- "2": ["XXX", "..X", "XXX", "X..", "XXX"], "3": ["XXX", "..X", ".XX", "..X", "XXX"],
- "4": ["X.X", "X.X", "XXX", "..X", "..X"], "5": ["XXX", "X..", "XXX", "..X", "XXX"],
- "6": ["XXX", "X..", "XXX", "X.X", "XXX"], "7": ["XXX", "..X", ".X.", ".X.", ".X."],
- "8": ["XXX", "X.X", "XXX", "X.X", "XXX"], "9": ["XXX", "X.X", "XXX", "..X", "XXX"],
- "R": ["XX.", "X.X", "XX.", "X.X", "X.X"], "E": ["XXX", "X..", "XX.", "X..", "XXX"],
- "A": [".X.", "X.X", "XXX", "X.X", "X.X"], "D": ["XX.", "X.X", "X.X", "X.X", "XX."],
- "Y": ["X.X", "X.X", ".X.", ".X.", ".X."], "G": ["XXX", "X..", "X.X", "X.X", "XXX"],
- "M": ["X.X", "XXX", "XXX", "X.X", "X.X"], "O": ["XXX", "X.X", "X.X", "X.X", "XXX"],
- "V": ["X.X", "X.X", "X.X", "X.X", ".X."], "!": [".X.", ".X.", ".X.", "...", ".X."],
- " ": ["...", "...", "...", "...", "..."], "P": ["XX.", "X.X", "XX.", "X..", "X.."],
- "S": ["XXX", "X..", "XXX", "..X", "XXX"], "C": ["XXX", "X..", "X..", "X..", "XXX"],
- "B": ["XX.", "X.X", "XX.", "X.X", "XX."], "F": ["XXX", "X..", "XX.", "X..", "X.."],
- "H": ["X.X", "X.X", "XXX", "X.X", "X.X"], "I": ["XXX", ".X.", ".X.", ".X.", "XXX"],
- "J": ["..X", "..X", "..X", "X.X", "XXX"], "K": ["X.X", "X.X", "XX.", "X.X", "X.X"],
- "L": ["X..", "X..", "X..", "X..", "XXX"], "N": ["XX.", "X.X", "X.X", "X.X", "X.X"],
- "Q": ["XXX", "X.X", "X.X", "XXX", "..X"], "T": ["XXX", ".X.", ".X.", ".X.", ".X."],
- "U": ["X.X", "X.X", "X.X", "X.X", "XXX"], "W": ["X.X", "X.X", "XXX", "XXX", "X.X"],
- "X": ["X.X", "X.X", ".X.", "X.X", "X.X"], "Z": ["XXX", "..X", ".X.", "X..", "XXX"],
- ".": ["...", "...", "...", "...", ".X."], "(": ["..X", ".X.", ".X.", ".X.", "..X"],
- ")": ["X..", ".X.", ".X.", ".X.", "X.."], "-": ["...", "...", "XXX", "...", "..."],
-}
-order = "0123456789RADYGMOV! EPSCBFHIJKLNQTUWXZ.()-"
+from font3x5 import FONT
+order = "0123456789RADYGMOV! EPSCBFHIJKLNQTUWXZ.()-:"
 out.append("GL_L    equ     %d" % order.index("L"))
 font = bytearray()
 for ch in order:
@@ -293,18 +271,18 @@ def text(label, s):
     out.append("        fcb     " + ",".join(str(order.index(ch)) for ch in s) + ",$FF")
 text("TREADY", "READY!")
 text("TOVER", "GAME OVER")
-text("TPRESS", "PRESS SPACE")
-text("TBLANK", "           ")
-text("TCAMCO", "CAMCO")
-text("TPRES", "PRESENTS")
-text("TTITLE", "PAK FAN")
-text("TSPACE", "PRESS SPACE")
-text("TPROG", "PROGRAMMING BY")
-text("TNAME1", "CARLOS A.")
-text("TNAME2", "CAMACHO")
-text("TCOPY", "(C) 2026 CAMCO")
-text("TLEVEL", "LEVEL 01")
-
+text("TT1", "PAK FAN BY CAMCO")
+text("TPLAY", "PLAY")
+text("TCTLK", "CONTROL:KEYBOARD")
+text("TCTLJ", "CONTROL:JOYSTICK")
+text("TSDAC", "SOUND:DAC")
+text("TSORC", "SOUND:ORCH90")
+text("TSOFF", "SOUND:OFF")
+text("TABOUT", "ABOUT")
+text("TPGM", "PROGRAMMER:")
+text("TNAME", "CARLOS CAMACHO")
+text("TCOPY", "(C) 1984 CAMCO")
+text("TBL16", "                ")
 open("tables.inc", "w").write("\n".join(out) + "\n")
 print("tables.inc: %d levels, %d sprite bytes, %d font bytes" % (len(levels), len(spr), len(font)))
 

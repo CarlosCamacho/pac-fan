@@ -82,6 +82,11 @@ ST3
 * the audio engine lives in the upper 32K: the SAM to all-RAM mode ($FFDF), then look for its
 * signature. Not there (a 32K machine, or the game was LOADMed on its own): ROM mode again, no sound.
         clr     HAVEAUD
+        clr     ENGINE
+        clr     MSEL
+        clr     OPTCTL
+        clr     OPTSND
+        clr     SNDI
         sta     $FFDF
         ldx     #$8000
         ldd     ,x
@@ -91,6 +96,7 @@ ST3
         cmpd    #$4101          ; 'A' 1
         bne     NOAUD
         inc     HAVEAUD
+        inc     ENGINE
         clr     CURAMB
         jsr     $8004           ; the engine's own start
         bra     AUDX
@@ -163,16 +169,12 @@ TI1     lda     ,x+
 WSPACE  lbsr    WAITVS
         lbsr    FLIP
         inc     FRAMES
-        lbsr    TITLEKEYS       ; up/down: pick the starting level
+        lbsr    MENUIN          ; the menu: keys, joystick
         lbsr    TITLEANIM
         lbsr    RENDER
-        lda     #$7F            ; SPACE: column 7, row 3
-        sta     $FF02
-        lda     $FF00
-        bita    #$08
-        bne     WSPACE
-        lda     #$FF
-        sta     $FF02
+        tst     MGO
+        beq     WSPACE
+        clr     MGO
         lda     #2              ; the credit sound
         lbsr    SNDB
         lda     LEVEL
@@ -1747,7 +1749,18 @@ READKEYS
         bsr     KEY
         lda     #$FF
         sta     $FF02
-        rts
+        tst     OPTCTL          ; the stick, if the menu says so
+        beq     KYX
+        lbsr    JOYDIR          ; B: bit 0 up, 1 down, 2 left, 3 right
+        ldx     #KYMAP
+KJ1     lda     ,x+             ; E_WANT for each bit, 0..3 then 255
+        bmi     KYX
+        lsrb
+        bcc     KJ1
+        sta     E_WANT,u
+        bra     KJ1
+KYMAP   fcb     2,3,1,0,255
+KYX     rts
 KEY     sta     $FF02
         lda     $FF00
         bita    #$08            ; arrows are all on row 3
@@ -1999,99 +2012,274 @@ SPLASH  lbsr    FILL3
         clr     VALID0
         clr     VALID1
         clr     REDRAW
-        ldx     #TCAMCO
+        ldx     #TT1            ; PAK FAN BY CAMCO
         lda     #YELLOWC
         ldb     #2
         lbsr    PRINTC
-        ldx     #TPRES
-        lda     #WHITEC
-        ldb     #9
-        lbsr    PRINTC
-        ldx     #TTITLE
-        lda     #YELLOWC
-        ldb     #19
-        lbsr    PRINTC
-        ldx     #TPROG
+        ldx     #TPGM
         lda     #CYANC
-        ldb     #44
+        ldb     #78
         lbsr    PRINTC
-        ldx     #TNAME1
+        ldx     #TNAME
         lda     #CYANC
-        ldb     #52
-        lbsr    PRINTC
-        ldx     #TNAME2
-        lda     #CYANC
-        ldb     #59
+        ldb     #84
         lbsr    PRINTC
         ldx     #TCOPY
         lda     #CYANC
-        ldb     #69
+        ldb     #90
         lbsr    PRINTC
-        ldx     #TSPACE
+        clr     MPREV
+        clr     MGO
+* ---------------------------------------------------------------- the title menu
+* Rows (text rows at element rows 44, 51, 58, 65): PLAY, CONTROL, SOUND, ABOUT.
+* UP/DOWN pick a row, LEFT/RIGHT change what it holds (CONTROL, SOUND), SPACE, ENTER and fire do the row.
+MENUDRAW
+        clr     MROW
+MD1     ldb     MROW
+        ldx     #ROWY
+        lda     b,x
+        sta     MYY
         lda     #YELLOWC
-        ldb     #83
+        cmpb    MSEL
+        bne     MD2
+        lda     #WHITEC
+MD2     sta     MCLR
+        ldx     #TBL16          ; blank the row, then the text
+        lda     MCLR
+        ldb     MYY
         lbsr    PRINTC
-        ldx     #TLEVEL
-        lda     #YELLOWC
-        ldb     #76
-        lbsr    PRINTC
-        clr     TKPREV
-        lbra    SHOWLV
-
-* TITLEKEYS: on the title, UP and DOWN step the starting level (one step a press)
-TITLEKEYS
-        clr     TK
-        lda     #$F7            ; up: column 3, row 3
-        sta     $FF02
-        lda     $FF00
-        bita    #$08
-        bne     TK1
-        lda     #1
-        sta     TK
-TK1     lda     #$EF            ; down: column 4, row 3
-        sta     $FF02
-        lda     $FF00
-        bita    #$08
-        bne     TK2
-        lda     #2
-        sta     TK
-TK2     lda     #$FF
-        sta     $FF02
-        lda     TK
-        cmpa    TKPREV
-        beq     TKX
-        sta     TKPREV
+        lda     MROW
+        asla
+        ldx     #MTXT
+        ldx     a,x             ; the row's text: its own, or for CONTROL and SOUND the chosen one
+        lda     MROW
         cmpa    #1
-        beq     TKUP
-        cmpa    #2
-        bne     TKX
-        lda     LEVEL
-        bne     TKD1
-        lda     #NLEV
-TKD1    deca
-        sta     LEVEL
-        lda     #9
-        lbsr    SNDS
-        bra     SHOWLV
-TKUP    lda     LEVEL
-        inca
-        cmpa    #NLEV
-        blo     TKU1
-        clra
-TKU1    sta     LEVEL
-        lda     #9
-        lbsr    SNDS
-* SHOWLV: the two digits of "LEVEL nn" on the title
-SHOWLV  lbsr    LVDIG
+        bne     MD3
+        ldx     #TCTLK
+        tst     OPTCTL
+        beq     MD5
+        ldx     #TCTLJ
+        bra     MD5
+MD3     cmpa    #2
+        bne     MD5
+        lda     OPTSND
+        asla
+        ldx     #SNDTX
+        ldx     a,x
+MD5     lda     MCLR
+        ldb     MYY
+        lbsr    PRINTC
+        inc     MROW
+        lda     MROW
+        cmpa    #4
+        blo     MD1
+        rts
+ROWY    fcb     44,51,58,65
+MTXT    fdb     TPLAY,0,0,TABOUT
+* the sound choices in the order of the menu: DAC GMC SSC ORCH90 SIDX OFF; the ones this build
+* can make are in SNDLIST (ids into SNDTX)
+SNDTX   fdb     TSDAC,0,0,TSORC,0,TSOFF
+SNDLIST fcb     0,3,5
+SNDCNT  equ     3
+
+* MENUIN: read the keys and the stick, and act on a press (not on a key held)
+MENUIN  clrb
+        ldx     #MKEYS
+MI1     lda     ,x+             ; column strobe (0 = end)
+        beq     MI6
+        sta     $FF02
+        lda     $FF00
+        anda    ,x+             ; the row's bit
+        bne     MI2
+        orb     ,x
+MI2     leax    1,x
+        bra     MI1
+MKEYS   fcb     $F7,8,1,$EF,8,2,$DF,8,4,$BF,8,8,$7F,8,16,$FE,$40,16,0
+MI6     lda     #$FF
+        sta     $FF02
+        lda     $FF00
+        bita    #1              ; the right fire button
+        bne     MI7
+        orb     #16
+MI7     tst     OPTCTL
+        beq     MI8
         pshs    b
-        ldb     #YELLOWC
-        ldx     #76*32+20
-        lbsr    GLYPHAT
+        lbsr    JOYDIR          ; B = the stick's directions (bit 0 up, 1 down, 2 left, 3 right)
+        orb     ,s+
+MI8     stb     MCUR
+        lda     MPREV
+        coma
+        anda    MCUR            ; the newly pressed
+        ldb     MCUR
+        stb     MPREV
+        tsta
+        bne     MI9
+        rts
+MI9     tfr     a,b
+        bitb    #1
+        beq     MJ1
+        lda     MSEL
+        deca
+        anda    #3
+        sta     MSEL
+        lbra    MJX
+MJ1     bitb    #2
+        beq     MJ2
+        lda     MSEL
+        inca
+        anda    #3
+        sta     MSEL
+        bra     MJX
+MJ2     pshs    b
+        lda     MSEL
+        beq     MJ4             ; PLAY: left and right pick the level
+        cmpa    #1
+        beq     MJ6
+        cmpa    #2
+        beq     MJ7
+        puls    b               ; ABOUT: only a press
+        bitb    #16
+        beq     MJX
+        lbra    ABOUT
+MJ4     puls    b
+        bitb    #16
+        beq     MJ5
+        inc     MGO             ; PLAY
+        rts
+MJ5     rts             ; PLAY: left and right do nothing
+MJ6     puls    b              ; CONTROL: any of left, right, press
+        lda     OPTCTL
+        eora    #1
+        sta     OPTCTL
+        clr     JSEEN
+        bra     MJX
+MJ7     puls    b              ; SOUND: left back, right and press forward
+        lda     SNDI
+        bitb    #4
+        bne     MJ7B
+        inca
+        cmpa    #SNDCNT
+        blo     MJ7C
+        clra
+        bra     MJ7C
+MJ7B    tsta
+        bne     MJ7D
+        lda     #SNDCNT
+MJ7D    deca
+MJ7C    sta     SNDI
+        ldx     #SNDLIST
+        lda     a,x
+        sta     OPTSND
+        lbsr    SNDSET
+MJX     lda     #9              ; the bounce for every move
+        lbsr    SNDS
+        lbsr    MENUDRAW
+        rts
+
+* SNDSET: OPTSND decides the engine's output (and whether there is sound at all)
+SNDSET  clr     HAVEAUD
+        tst     ENGINE
+        beq     SSX
+        ldb     OPTSND
+        cmpb    #5              ; OFF
+        beq     SSX
+        inc     HAVEAUD
+        lda     #0              ; engine mode: 0 DAC, 1 Orchestra-90
+        cmpb    #3
+        bne     SS1
+        lda     #1
+SS1     tfr     a,b
+        jsr     $8010           ; A_SETMODE
+SSX     rts
+
+* ABOUT: the story in SG24, page by page (the engine's code): any key or fire turns the page
+ABOUT   tst     ENGINE
+        lbeq    MJX
+        lda     LEVEL
+        sta     STARTLV
+        lda     COCO3
+        jsr     $800D
+        lbcs    QUIT
+        lbra    NEWGAME
+
+* JOYREAD: the right stick (the DAC and the comparator): A = how far over to the right (X) and B = how
+* far down (Y), 0..63. A stick that is not there reads 0,0.
+JOYDIR  clrb                    ; (directions)
+        lbsr    JOYXY
+        sta     TMP             ; X
+        stb     TX              ; Y
+        tst     JSEEN
+        bne     JD1
+        cmpa    #20             ; wait until the stick has been seen near the middle
+        blo     JDZ
+        cmpa    #44
+        bhs     JDZ
+        cmpb    #20
+        blo     JDZ
+        cmpb    #44
+        bhs     JDZ
+        inc     JSEEN
+JDZ     clrb
+        rts
+JD1     clrb
+        cmpa    #20
+        bhs     JD2
+        orb     #4              ; left
+JD2     cmpa    #44
+        blo     JD3
+        orb     #8              ; right
+JD3     lda     TX
+        cmpa    #20
+        bhs     JD4
+        orb     #1              ; up
+JD4     cmpa    #44
+        blo     JD5
+        orb     #2              ; down
+JD5     rts
+
+* JOYXY: A = X, B = Y of the right stick, by successive approximation with the 6-bit DAC
+JOYXY   lda     $FF01
+        anda    #$F7            ; axis X (CA2 = 0) of the right stick (CB2 = 0)
+        sta     $FF01
+        lda     $FF03
+        anda    #$F7
+        sta     $FF03
+        bsr     JOYAX
+        pshs    a
+        lda     $FF01
+        ora     #8              ; axis Y
+        sta     $FF01
+        bsr     JOYAX
+        tfr     a,b
+        lda     $FF01
+        anda    #$F7            ; back to the DAC (sound source)
+        sta     $FF01
+        lda     #$82
+        sta     $FF20
         puls    a
-        ldb     #YELLOWC
-        ldx     #76*32+22
-        lbra    GLYPHAT
-TKX     rts
+        rts
+JOYAX   clr     TMP2
+        lda     #32
+        sta     SBIT
+JA1     lda     TMP2
+        ora     SBIT
+        asla
+        asla
+        ora     #2              ; (bit 1: the RS-232 line idles high)
+        sta     $FF20
+        nop                     ; the comparator takes a moment (and a CoCo 3 more after a mux switch)
+        nop
+        nop
+        nop
+        tst     $FF00           ; bit 7: the stick is above the DAC
+        bpl     JA2
+        lda     TMP2
+        ora     SBIT
+        sta     TMP2
+JA2     lsr     SBIT
+        bne     JA1
+        lda     TMP2
+        rts
 
 * TCODE: B = draw code for the tile type at Y (in TILES; BCOL 16..1 and BROW 15..1 say
 * where it is): a wall line gets its join mask (R1 L2 U4 D8) from neighbouring walls,
@@ -2462,7 +2650,22 @@ MCOLB   rmb     1
 MPTR    rmb     2
 NROW    rmb     1
 WAKAT   rmb     1
-HAVEAUD rmb     1               ; 1 = the audio engine is in the upper 32K
+HAVEAUD rmb     1               ; 1 = sound on: the audio engine is there and SOUND is not OFF
+ENGINE  rmb     1               ; 1 = the audio engine is in the upper 32K
+MROW    rmb     1
+MYY     rmb     1
+MCLR    rmb     1
+MCLR0   rmb     1
+MSEL    rmb     1               ; the menu row picked
+MPREV   rmb     1
+MCUR    rmb     1
+MGO     rmb     1
+OPTCTL  rmb     1               ; 0 keyboard, 1 joystick
+OPTSND  rmb     1               ; the sound: id in SNDTX
+SNDI    rmb     1               ; ...and its place in SNDLIST
+JSEEN   rmb     1
+TMP2    rmb     1
+SBIT    rmb     1
 CURAMB  rmb     1               ; the loop now playing under the game
 DOTST   rmb     1               ; dots in this maze
 DOTSTEP rmb     1               ; a fifth of them
@@ -2490,8 +2693,6 @@ SCRP    rmb     2
 BROW    rmb     1
 BCOL    rmb     1
 TIDX    rmb     1
-TK      rmb     1
-TKPREV  rmb     1
 TILES   rmb     240
 LAP     rmb     1
 FLBUF   rmb     2
@@ -2530,11 +2731,11 @@ TESTB   set     1
 TESTB   set     1
         endc
         ifdef   TESTB
-        if      ENDVARS>$7800           ; the test builds may use more; they never ship
+        if      ENDVARS>$7C00           ; the test builds may use more; they never ship
         error   "test build runs into the stack area"
         endc
         else
-        if      ENDVARS>$7000
+        if      ENDVARS>$7400
         error   "program runs into the stack area"
         endc
         endc

@@ -18,7 +18,8 @@
 #            a CoCo 3 and a CoCo 3 left at high speed (needs numpy)
 #   sound    eating dots is audible
 #   lap      clearing level 40 goes round to level 1 at top speed
-#   title    UP/DOWN pick the starting level (wrapping both ways) and SPACE starts on it
+#   menu     CONTROL and SOUND change (wrapping both ways), ABOUT pages through and comes back, PLAY starts
+#   joy      a scripted stick moves the menu and steers the player
 #   score    the score on screen equals the score after many updates, and rolls over past 999,999
 #   eyes     on every level, from every tile, the way-home map leads the eyes back to the house
 #   protect  both the game and the autopilot build, all 40 levels, under -protect-mode (CoCo 3):
@@ -275,40 +276,112 @@ check_protect() {
   done
 }
 
-# title: UP and DOWN pick the starting level (one step a press, wrapping both ways) and SPACE
-# starts the game on it.
-check_title() {
-  O=$D/title; rm -rf "${O:?}"; mkdir -p "$O"
-  FR=$(s FRAME); n=0
-  for sc in "down:39" "down,up:0" "up,up,down:1" "down,down:38" "up:1"; do
-    n=$((n + 1)); echo "${sc##*:}" > "$O/want$n"
+# joystick: with CONTROL set to JOYSTICK, a scripted stick (xroar-dev's -joy-right script) moves the menu
+# (down a row, right on SOUND, fire presses) and steers the player in the game.
+check_joy() {
+  O=$D/joy; rm -rf "${O:?}"; mkdir -p "$O"
+  cat > "$O/menu.txt" <<'EOF'
+wait 3000
+type LOADM"PAKFAN":EXEC\r
+wait 8000
+move 32767 32767
+wait 500
+key down down
+wait 300
+key down up
+wait 300
+key right down
+wait 300
+key right up
+wait 500
+move 32767 65535
+wait 600
+move 32767 32767
+wait 600
+move 65535 32767
+wait 600
+move 32767 32767
+wait 600
+down
+wait 400
+up
+wait 800
+EOF
+  cat > "$O/game.txt" <<'EOF'
+wait 3000
+type LOADM"PAKFAN":EXEC\r
+wait 8000
+move 32767 32767
+wait 300
+key down down
+wait 300
+key down up
+wait 300
+key right down
+wait 300
+key right up
+wait 500
+key up down
+wait 300
+key up up
+wait 500
+key space down
+wait 300
+key space up
+wait 6000
+move 65535 32767
+wait 9000
+EOF
+  emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/menu.txt" -trap "seconds=22" -trap-ram "$O/menu.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
+  emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/game.txt" -trap "seconds=28" -trap-ram "$O/game.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
+  wait
+  python3 -I - "$O" "$SYM" <<'PY' && say PASS "joystick: the stick moves the menu (down, right, fire) and steers the player" || say FAIL "joystick"
+import sys
+o = sys.argv[1]
+S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(sys.argv[2]) if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
+m = open(o + '/menu.ram', 'rb').read(); g = open(o + '/game.ram', 'rb').read()
+e = S['ENTS']
+got = (m[S['OPTCTL']], m[S['MSEL']], m[S['OPTSND']], g[e + 2], g[e + 3])
+print('  OPTCTL, MSEL, OPTSND, player dir, want: %s (wanted 1, 2, 5, 0, 0)' % (got,))
+sys.exit(0 if got == (1, 2, 5, 0, 0) else 1)
+PY
+}
+
+# menu: UP/DOWN pick a row (PLAY starts the game at level 1), LEFT/RIGHT change CONTROL (keyboard/joystick) and SOUND (DAC, Orchestra-90, OFF,
+# wrapping both ways), ENTER on ABOUT shows the story (any key turns the pages, then back at the menu).
+check_menu() {
+  O=$D/menu; rm -rf "${O:?}"; mkdir -p "$O"
+  n=0
+  # keys : OPTCTL OPTSND HAVEAUD STARTLV (-1: not checked)
+  for sc in "down,right:1:0:1:-1" "down,down,right:0:3:1:-1" "down,down,right,right:0:5:0:-1" "down,down,right,right,right:0:0:1:-1" "down,down,left:0:5:0:-1" \
+            "down,down,down,enter,a,a,up,up,up,space:0:0:1:0"; do
+    n=$((n + 1)); echo "${sc#*:}" > "$O/want$n"
     python3 -I - "$O/in$n.txt" "${sc%%:*}" <<'PY'
 import sys
 out, keys = sys.argv[1], sys.argv[2].split(',')
 L = ['wait 3000', 'type LOADM"PAKFAN":EXEC\\r', 'wait 8000']
 for k in keys:
-    L += ['key %s down' % k, 'wait 250', 'key %s up' % k, 'wait 250']
-open(out, 'w').write('\n'.join(L + ['key space down', 'wait 300', 'key space up', 'wait 4000']) + '\n')
+    L += ['key %s down' % k, 'wait 300', 'key %s up' % k, 'wait 1200' if k in ('enter', 'a') else 'wait 300']
+open(out, 'w').write('\n'.join(L + ['wait 6000']) + '\n')
 PY
-    emu c2 -load-fd0 "$DSK" -input-script "$O/in$n.txt" -trap "xpc=0x0$FR" -trap-range 1-1 \
-      -trap-ram "$O/r$n.ram" -trap-timeout 0 -timeout 60 >/dev/null 2>&1 &
+    emu c2 -load-fd0 "$DSK" -input-script "$O/in$n.txt" -trap "seconds=44" -trap-ram "$O/r$n.ram" -trap-timeout 1 -timeout 80 >/dev/null 2>&1 &
   done
   wait
-  python3 -I - "$O" "$SYM" <<'PY' && say PASS "title: UP/DOWN pick the level (wrapping both ways) and SPACE starts on it" || say FAIL "title: level select"
+  python3 -I - "$O" "$SYM" $n <<'PY' && say PASS "menu: CONTROL and SOUND change, ABOUT pages through and comes back, PLAY starts" || say FAIL "menu"
 import sys
-o = sys.argv[1]
+o = sys.argv[1]; N = int(sys.argv[3])
 S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(sys.argv[2]) if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
 ok = True
-for n in range(1, 6):
-    want = int(open('%s/want%d' % (o, n)).read())
+for n in range(1, N + 1):
+    want = [int(x) for x in open('%s/want%d' % (o, n)).read().strip().split(':')]
     try:
         d = open('%s/r%d.ram' % (o, n), 'rb').read()
-        got = (d[S['LEVEL']], d[S['STARTLV']])
+        got = [d[S['OPTCTL']], d[S['OPTSND']], d[S['HAVEAUD']], d[S['STARTLV']]]
     except OSError:
         got = None
-    good = got == (want, want)
+    good = got is not None and all(w < 0 or w == g for w, g in zip(want, got))
     ok &= good
-    if not good: print('  scenario %d: wanted level index %d, got %s' % (n, want, got))
+    if not good: print('  scenario %d: wanted %s, got %s' % (n, want, got))
 sys.exit(0 if ok else 1)
 PY
 }
@@ -527,8 +600,8 @@ PY
 }
 
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break basic fuzz speed tune sound lap title score eyes overrun protect loader
+[ $# -gt 0 ] || set -- break basic fuzz speed tune sound lap menu joy score eyes overrun protect loader
 for c in "$@"; do
-  case $c in break|basic|fuzz|speed|tune|sound|lap|title|score|eyes|overrun|protect|loader) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
+  case $c in break|basic|fuzz|speed|tune|sound|lap|menu|joy|score|eyes|overrun|protect|loader) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done
 exit $FAILED

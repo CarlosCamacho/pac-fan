@@ -5,8 +5,12 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
 
     RUN"PAKFAN"             the logo and a progress bar while it loads, then the game.
                             Arrow keys move, SPACE starts, BREAK returns to BASIC
-                            from anywhere (title, music, play, flash), UP/DOWN pick the
-                            starting level (1-40) on the title
+                            from anywhere (title, music, play, flash); UP/DOWN pick a menu row, LEFT/RIGHT
+                            options on the title menu
+
+The title is a menu: PLAY (always from level 1), CONTROL (keyboard or the right joystick),
+SOUND (the 6-bit DAC, Orchestra-90, or off) and ABOUT (the story, a page at a time in SG24; any key or
+fire turns the page). UP/DOWN pick a row, SPACE, ENTER or fire do it. More sound hardware is to come.
 
 Needs a 64K CoCo 1 or 2, or a CoCo 3. The sounds are played by an engine in the upper 32K
 (all-RAM mode, switched on while the game runs and off again when it ends), which only
@@ -50,7 +54,7 @@ only, not yet on a real CoCo 3.
 - Sound: 17 original sounds (`assets/audio/`), played by a 3-voice wave-table synth. The start
   music at READY!, the intermission music after every eighth maze, the credit sound on SPACE,
   the death, a ghost eaten (these play to the end), the dot chirps (two, alternating), the
-  bonus sparkle on a power pellet, a fanfare and an extra life at 10,000 points, a bounce when UP/DOWN pick the level, and under the
+  bonus sparkle on a power pellet, a fanfare and an extra life at 10,000 points, a bounce for every move in the menu, and under the
   game a siren that steps up after each fifth of the dots, a growl while the ghosts are blue and a
   run of bells while eyes go home. Effects and loops play in the time each frame would otherwise
   spend waiting for vertical sync, so they can never make a frame late.

@@ -2,7 +2,7 @@
 * cannot reach: the SAM goes to all-RAM mode ($FFDF) while the bytes are copied, and back
 * ($FFDE). Each file carries its own source, destination and length (the three words after the first branch). The loader EXECs this after each LOADM; it is loaded with the piece, before the game
 * itself (which then takes the place of both).
-        org     $6E00
+        org     $7000
 CP      bra     CP0
 SRC     fdb     0               ; mkpak.py fills these three in, a file at a time
 DST     fdb     0
