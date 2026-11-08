@@ -6,12 +6,12 @@
 Writes into dist/ and builds dist/PAKFAN.DSK with:
     PAKFAN.BIN   the whole game, as before:      LOADM"PAKFAN":EXEC
     PAKFAN.BAS   the loader (plain-text BASIC):  RUN"PAKFAN"
-    PAKLOGO.BIN  the loading screen (assets/pakfan-logo.bin) for $0E00, where the SG12 screen is
+    PAKLOGO.BIN  the loading screen, an SG24 screen (assets/pakfan-logo.bin) for $0E00
     PAK01..PAK10.BIN  the game in ten pieces, so the bar can move after each one
 
 The loader shows the logo, then LOADMs the ten pieces, filling the bar two bytes after each, and
 EXECs the game. It uses only BASIC's LOADM, so it works from a floppy, a CoCoSDC or DriveWire
-alike. Its screen is the game's own mode (SG12), so the logo gives way to the title with no switch.
+alike. The logo is SG24; the game's own start-up switches to SG12.
 """
 import os
 import sys
@@ -63,12 +63,12 @@ def loader():
         'C3=(PEEK(65534)=140)',                              # a CoCo 3: its reset vector is $8C1B
         'IF C3 THEN GOSUB 200',
         'POKE 65314,PEEK(65314) AND 7',                      # VDG: semigraphics, colour set 0
-        'POKE 65477,0:POKE 65474,0:POKE 65472,0',            # SAM V = 100 (SG12)
+        'POKE 65477,0:POKE 65475,0:POKE 65472,0',            # SAM V = 110 (SG24)
         'POKE 65479,0:POKE 65481,0:POKE 65483,0:POKE 65484,0:POKE 65486,0:POKE 65488,0:POKE 65490,0',   # screen at $0E00
         'P=0',
         'FOR I=1 TO %d' % PIECES,
         'LOADM"PAK"+RIGHT$(STR$(100+I),2)',
-        'FOR C=P TO %d*I-1:%s:NEXT' % (step, ':'.join('POKE %d+C,%d' % (a0 + 32 * k, L.FILL_BYTE) for k in range(L.FILL_ROWS))),
+        'FOR C=P TO %d*I-1:FOR R=0 TO %d:POKE %d+C+32*R,%d:NEXT R,C' % (step, L.FILL_ROWS - 1, a0, L.FILL_BYTE),
         'P=%d*I:NEXT' % step,
         'FOR I=1 TO 300:NEXT',                               # a moment on the full bar
         'IF C3 THEN GOSUB 300',
@@ -81,7 +81,7 @@ def loader():
     cmp_rgb = [(0x11, 0x10), (0x34, 0x3E), (0x0C, 0x0E), (0x07, 0x21), (0x3F, 0x3F), (0x1E, 0x11), (0x18, 0x2F), (0x15, 0x26)]
     sub = [
         'DIM O(7):FOR I=0 TO 7:O(I)=PEEK(65456+I) AND 63:NEXT',
-        'POKE 65436,9',                                      # $FF9C = 9: SG12 on the GIME
+        'POKE 65436,10',                                     # $FF9C = 10: SG24 on the GIME
         'FOR I=0 TO 7:READ A,B:IF O(1)=54 THEN A=B',         # BASIC is in PALETTE RGB: its register 1 is $36
         'POKE 65456+I,A:NEXT:RETURN',
         'DATA ' + ','.join('%d,%d' % p for p in cmp_rgb),

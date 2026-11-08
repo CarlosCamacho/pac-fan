@@ -205,12 +205,21 @@ python3 tools/botdiff.py OLD_DIR OLD.sym NEW_DIR NEW.sym   # did an edit change 
 ## Loader and logo
 
 - `./build.sh` ends with `tools/mkpak.py`, which writes `dist/PAKFAN.BAS` (plain-text BASIC loader),
-  `PAKLOGO.BIN` (the SG12 loading screen from `assets/pakfan-logo.bin`) and `PAK01..PAK10.BIN` (the
-  game in ten pieces) next to the unchanged `PAKFAN.BIN`, and builds `PAKFAN.DSK` with all of them.
-  `RUN"PAKFAN"` shows the logo and fills a progress bar after each piece, then EXECs the game, whose
-  title replaces the logo. `LOADM"PAKFAN":EXEC` still works. Only BASIC's LOADM is used (floppy, CoCoSDC, DriveWire).
+  `PAKLOGO.BIN` (the SG24 loading screen from `assets/pakfan-logo.bin`, 6144 bytes at `$0E00-$25FF`)
+  and `PAK01..PAK10.BIN` (the game in ten pieces) next to the unchanged `PAKFAN.BIN`, and builds
+  `PAKFAN.DSK` with all of them. `RUN"PAKFAN"` shows the logo, fills a progress bar after each piece,
+  then EXECs the game; `START` switches to SG12 and `FILL3` clears the logo into the title.
+  `LOADM"PAKFAN":EXEC` still works. Only BASIC's LOADM is used (floppy, CoCoSDC, DriveWire). The
+  loader checks that BASIC's program starts at `$2601` (the screen ends at `$25FF`) and otherwise
+  loads plainly. On a CoCo 3 it sets `$FF9C` = 10 (SG24) and BASIC's palette registers to the game's
+  colors, and puts BASIC's palette back before EXEC.
+- SG24 bytes are `1 CCC L R L R`: a CoCo 1/2 reads bits 3-2 on the upper 6 scanlines of its
+  12-line character row and bits 1-0 on the lower 6. The Studio's export leaves bits 1-0 clear, which
+  shows as black stripes on a CoCo 1/2 (the CoCo 3 shows it right), so `mklogo.py` repeats the pair.
 - `tools/mklogo.py ART OUT.BIN [PREVIEW.PNG] [--save-art ART.PNG]` (needs numpy and Pillow) makes the
-  screen from a Studio `.asm` or the art PNG. Layout constants are in `tools/logolayout.py`.
-  The art must be 64 cells wide or less to avoid scaling; the game code is unchanged (217 bytes free).
-- Checked in xroar-dev on a CoCo 2 only (logo, bar, title). CoCo 3 run and a `loader` check in
-  `tools/checks.sh` are not done yet. BREAK while loading leaves the SG12 screen (RESET, or type `SCREEN 0,0` blind).
+  screen from a Studio `.asm` or the art PNG. The art must be at most 64 cells wide; it is never scaled.
+  Layout constants are in `tools/logolayout.py`. The game code is unchanged (217 bytes free).
+- Checked in xroar-dev on a CoCo 2 and a CoCo 3 by screenshots (logo, bar filling, title). Not done: a
+  `loader` check in `tools/checks.sh`, and real hardware. On a CoCo 3, `START` runs its speed test
+  (two or three fields) after switching to SG12 and before `FILL3`, so the logo shows stretched for
+  about 50 ms before the title. BREAK while loading leaves the SG24 screen (RESET, or type `SCREEN 0,0` blind).
