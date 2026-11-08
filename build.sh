@@ -6,4 +6,6 @@ $LWASM --version | grep -qE "4\.2[45]" || { echo "need lwasm 4.24 or 4.25 (set L
 python3 gen.py
 mkdir -p dist
 $LWASM -9 --format=decb --list=dist/pakfan.lst --symbol-dump=dist/pakfan.sym -o dist/PAKFAN.BIN pakfan.asm
+$LWASM -9 --format=decb --list=dist/audio.lst --symbol-dump=dist/audio.sym -o dist/AUDIO.BIN audio.asm
+$LWASM -9 --format=decb -o dist/COPIER.BIN copier.asm
 python3 tools/mkpak.py          # the loader, the logo screen, the pieces, and the disk image

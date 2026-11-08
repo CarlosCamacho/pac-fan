@@ -3,11 +3,14 @@
 A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos A. Camacho
 (CAMCO). An unofficial fan game; not affiliated with or endorsed by the owners of Pac-Man.
 
-    LOADM"PAKFAN":EXEC      arrow keys move, SPACE starts, BREAK returns to BASIC
-                            from anywhere (title, tune, play, flash), UP/DOWN pick the
+    RUN"PAKFAN"             the logo and a progress bar while it loads, then the game.
+                            Arrow keys move, SPACE starts, BREAK returns to BASIC
+                            from anywhere (title, music, play, flash), UP/DOWN pick the
                             starting level (1-40) on the title
 
-Needs a 32K CoCo 1 or 2, or a CoCo 3. On a CoCo 3 the game sets `$FF9C` to 9, which makes
+Needs a 64K CoCo 1 or 2, or a CoCo 3. The sounds are played by an engine in the upper 32K
+(all-RAM mode, switched on while the game runs and off again when it ends), which only
+`RUN"PAKFAN"` loads: `LOADM"PAKFAN":EXEC` on its own starts the game silent. On a CoCo 3 the game sets `$FF9C` to 9, which makes
 the GIME show SG12, and loads palette registers 0-7 with the codes nearest a CoCo 2's eight
 SG colours: a composite set, or an RGB set if BASIC was in `PALETTE RGB`. BREAK puts back
 15 and BASIC's own palette. A CoCo 3 left at high speed (`POKE 65497,0`) is run at normal
@@ -44,10 +47,15 @@ only, not yet on a real CoCo 3.
   off from below.
 - Title screen: the credits, PRESS SPACE, and the player and the ghosts chasing across
   the middle; every five seconds the ghosts turn blue and the chase runs the other way.
-- "Wa-ka" eat sound: alternate falling and rising sweeps, played in the time each frame
-  would otherwise spend waiting for vertical sync, so it can never make a frame late.
+- Sound: 17 original sounds (`assets/audio/`), played by a 3-voice wave-table synth. The start
+  music at READY!, the intermission music after every eighth maze, the credit sound on SPACE,
+  the death, a ghost eaten (these play to the end), the dot chirps (two, alternating), the
+  bonus sparkle on a power pellet, a fanfare and an extra life at 10,000 points, a bounce when UP/DOWN pick the level, and under the
+  game a siren that steps up after each fifth of the dots, a growl while the ghosts are blue and a
+  run of bells while eyes go home. Effects and loops play in the time each frame would otherwise
+  spend waiting for vertical sync, so they can never make a frame late.
 - Splash screen: CAMCO PRESENTS, the cast, PROGRAMMING BY CARLOS A. CAMACHO,
-  (C) 2026 CAMCO, with an original two-voice intro tune (also played at game start).
+  (C) 2026 CAMCO.
 - Ghost behaviour follows the arcade rules: scatter/chase phases (7/20/7/20/5/20/5 s,
   then chase), every switch reverses the ghosts; red targets the player, pink four tiles
   ahead (with the arcade's facing-up quirk), cyan doubles the vector from red to two tiles
@@ -56,8 +64,10 @@ only, not yet on a real CoCo 3.
   blue ghosts move at half speed and choose at random; red speeds up at 20 and 10 dots
   left ("Elroy"); ghosts leave the house by dot count (0, 0, 30, 60) or after 4 s
   without a dot eaten. Each level speeds the ghosts up.
-- Music: a sawtooth engine, two voices through the 6-bit DAC at 11,328 Hz (a 79-cycle
-  sample loop, measured), blocking, used on the splash and before the first life.
+- Audio engine (`audio.asm`, loaded at `$8000`): three voices, each a 16-bit phase step and a
+  32-entry table scaled by a volume, summed into the 6-bit DAC at 8,062 Hz (a 111-cycle sample loop,
+  measured in xroar-dev). A tick is a video field; the streams come from the sound designs by
+  `tools/mksynth.py`.
 
 Technique: everything shape-related is a table built by `gen.py` (per-level tile codes
 and wall patterns, from which the background screen is built at each level start; sprites pre-shifted for both element positions in a byte with AND/OR masks that

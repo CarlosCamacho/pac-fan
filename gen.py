@@ -305,36 +305,6 @@ text("TNAME2", "CAMACHO")
 text("TCOPY", "(C) 2026 CAMCO")
 text("TLEVEL", "LEVEL 01")
 
-# ---- music: an original two-voice tune for the sawtooth engine (not from any game).
-# The engine runs one sample every SAMPCYC cycles; each record is a sample count, then
-# f1, f2 (phase steps). A count of 0 ends the tune.
-SAMPCYC = 79                       # counted from the SAWPLAY loop in pakfan.asm
-RATE = 894886 / SAMPCYC
-def hz(n):
-    if n is None: return 0
-    names = {"C":0,"D":2,"E":4,"F":5,"G":7,"A":9,"B":11}
-    semis = names[n[0]] + 12 * (int(n[1:]) + 1)
-    return 440.0 * 2 ** ((semis - 69) / 12)
-def step(n):
-    return int(round(hz(n) * 65536 / RATE)) & 0xFFFF
-E8 = 0.15
-mel = "C5 E5 G5 C6 B5 G5 E5 G5 A5 F5 D5 F5 A5 C6 A5 F5 G5 E5 C5 E5 G5 B5 D6 B5 C6 G5 E5 G5 C6 - - -".split()
-bas = "C3 C3 G2 C3 F2 F2 C3 F2 G2 G2 D3 G2 C3 G2 C3 -".split()
-recs = []
-for k in range(32):
-    m = None if mel[k] == "-" else mel[k]
-    b = bas[k // 2]; b = None if b == "-" else b
-    n = int(round(E8 * RATE))
-    gap = int(round(0.012 * RATE))           # a short gap so repeated notes articulate
-    recs.append((step(m), step(b), n - gap)); recs.append((0, step(b), gap))
-words = []
-for f1, f2, n in recs:
-    words += [n, f1, f2]          # sample count first: 0 ends the tune
-words.append(0)
-out.append("* original intro tune (samples, f1, f2), %d Hz sample rate" % RATE)
-out.append("TUNE")
-for i in range(0, len(words), 12):
-    out.append("        fdb     " + ",".join("$%04X" % w for w in words[i:i+12]))
 open("tables.inc", "w").write("\n".join(out) + "\n")
 print("tables.inc: %d levels, %d sprite bytes, %d font bytes" % (len(levels), len(spr), len(font)))
 

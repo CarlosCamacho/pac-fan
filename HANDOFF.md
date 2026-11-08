@@ -131,3 +131,10 @@ deselected, or the loop two cycles slower, fails them.
    4-bit packing to fit 40 levels, an eyes-home path map, the death flash, speed by level,
    autopilot difficulty ranking and play order.
 5. The CoCo 3 `$FF9C` investigation with SGTEST, and coco-hardware v3.26.
+
+Sounds, November 8: the owner sent a pack of sounds rendered from the arcade ROM's sound tables
+and the Namco waveform PROM (`start_music`, `siren_1`... ). Declined four times, including a request to change
+the rules to allow it. He then sent an original set (`assets/audio/`, `build_audio.py` makes it from notes and
+sweeps) and asked for a 2-3 voice synth with all RAM mode; that is `audio.asm`
+(CLAUDE.md, "Audio engine"). The old two-voice sawtooth tune, `SAWPLAY`, the wa-ka and `SWEEP`
+are gone. Nothing has been heard on real hardware.

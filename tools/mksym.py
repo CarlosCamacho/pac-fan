@@ -17,7 +17,7 @@ if len(sys.argv) < 4:
 lst, sym, out = sys.argv[1:4]
 base = int(sys.argv[4], 0) if len(sys.argv) > 4 else 0
 
-DATA = {'fcb', 'fdb', 'fcc', 'fcs', 'fqb', 'zmb', 'fill', 'rmb', 'fcr'}
+DATA = {'fcb', 'fdb', 'fcc', 'fcs', 'fqb', 'zmb', 'fill', 'rmb', 'fcr', 'includebin'}
 code, data = [], []
 cur = None                                   # (kind, next address) for continuation lines
 for line in open(lst):

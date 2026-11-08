@@ -39,8 +39,9 @@ FAILED=0
 have3() { [ -f "$ROMS/coco3.rom" ]; }
 # emu MACHINE ARGS...: c2 = CoCo 2 NTSC 32K, c3 = CoCo 3. Traps use px MACHINE: the CoCo 3's
 # MMU puts logical $0000-$FFFF at physical $70000-$7FFFF.
+# (a CoCo 3 copies BASIC's ROM into the upper RAM as it starts, so the engine goes in when the game starts)
 emu() { m=$1; shift
-  case $m in c2) set -- -machine cocous -ram 32 "$@";; c3) set -- -machine coco3 "$@";; esac
+  case $m in c2) set -- -machine cocous -ram 64 -load-ram "$AUDRAW,addr=0x8000" "$@";; c3) set -- -machine coco3 -trap "xpc=0x73202" -trap-load "$AUDRAW,format=raw,addr=0x78000" "$@";; esac
   timeout 900 "$XROAR" -headless -rompath "$ROMS" "$@"; }
 px() { [ "$1" = c3 ] && echo 7 || echo 0; }
 s() { sym "$1" "${2:-$SYM}"; }
@@ -154,7 +155,8 @@ import sys
 o, v = sys.argv[1], sys.argv[2]
 loop = 'type TIMER=0:FOR I=1 TO 1500:NEXT:PRINT TIMER\\r\nwait 6000\n'
 pre = 'type POKE 65497,0\\r\nwait 500\n' if v == 'fast' else ''
-open('%s/%s.txt' % (o, v), 'w').write('wait 3000\n' + pre + loop + 'type LOADM"PAKFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\nkey break down\nwait 300\nkey break up\nwait 1500\n' + loop + 'wait 2000\n')
+tog = 'type LOADM"TOGGLE":EXEC\\r\nwait 2500\n'     # xroar-dev's CoCo 3 runs BASIC faster after any all-RAM toggle: measure after one
+open('%s/%s.txt' % (o, v), 'w').write('wait 3000\n' + pre + tog + loop + 'type LOADM"PAKFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\nkey break down\nwait 300\nkey break up\nwait 1500\n' + loop + 'wait 2000\n')
 PY
     emu c3 -load-fd0 "$DSK" -input-script "$O/$v.txt" -trap "xpc=0x7$Q" -trap-range 1-1 -trap-ram "$O/${v}_quit.ram" \
       -trap "seconds=70" -trap-ram "$O/${v}_end.ram" -trap-timeout 1 -timeout 120 >/dev/null 2>&1 &
@@ -188,7 +190,7 @@ check_lap() {
   emu c2 -load-fd0 "$DSK" -input-script "$WORK/start.txt" \
     -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/lv.bin,format=raw,addr=0x0$LV" \
     -trap "xpc=0x0$FR" -trap-range 90-90 -trap-load "$O/clr.bin,format=raw,addr=0x0$ST" \
-    -trap "seconds=24" -trap-ram "$O/after.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1
+    -trap "seconds=42" -trap-ram "$O/after.ram" -trap-timeout 1 -timeout 90 >/dev/null 2>&1
   python3 -I - "$O" "$LV" "$LP" "$GS" "$FT" <<'PY' && say PASS "lap: level 40 cleared goes to level 1 at speed 19, blue 2 s" || say FAIL "lap: wrong state after clearing level 40"
 import sys
 o = sys.argv[1]; lv, lp, gs, ft = [int(x, 16) for x in sys.argv[2:6]]
@@ -244,6 +246,10 @@ check_protect() {
   botbuild || { say FAIL "protect: the autopilot build failed"; return; }
   python3 "$HERE/tools/mksym.py" "$LST" "$SYM" "$O/real.gsym" 0x70000 >/dev/null || return 1
   python3 "$HERE/tools/mksym.py" "$D/bot/pakfan.lst" "$D/bot/pakfan.sym" "$O/bot.gsym" 0x70000 >/dev/null || return 1
+  # the audio engine in the upper 32K (physical $78000 up on a CoCo 3) is code too
+  python3 "$HERE/tools/mksym.py" "$HERE/dist/audio.lst" "$HERE/dist/audio.sym" "$O/audio.gsym" 0x70000 >/dev/null || return 1
+  grep -v '^S ' "$O/audio.gsym" | tail -n +2 >> "$O/real.gsym"
+  grep -v '^S ' "$O/audio.gsym" | tail -n +2 >> "$O/bot.gsym"
   for v in real bot; do
     if [ $v = real ]; then SY=$SYM; DK=$DSK; else SY=$D/bot/pakfan.sym; DK=$D/bot/PAKFAN.DSK; fi
     SA=$(s START "$SY"); WS=$(s WSPACE "$SY"); LV=$(s LEVEL "$SY"); BS=$(s BSEED "$SY")
@@ -441,7 +447,7 @@ PY
 check_tune() {
   python3 -c 'import numpy' 2>/dev/null || { echo "SKIP tune (no numpy)"; return; }
   O=$D/tune; rm -rf "${O:?}"; mkdir -p "$O"
-  SW=$(s SAWPLAY); SX=$(s SWX)
+  SB=$(s STARTMUS); MO=$(s MSGOFF)
   for sc in c2:normal c3:normal c3:fast; do
     m=${sc%%:*}; v=${sc##*:}
     [ $m = c3 ] && ! have3 && continue
@@ -451,16 +457,17 @@ import sys
 pre = 'type POKE 65497,0\\r\nwait 500\n' if sys.argv[2] == 'fast' else ''
 open(sys.argv[1], 'w').write('wait 3000\n' + pre + 'type LOADM"PAKFAN":EXEC\\r\nwait 8000\nkey space down\nwait 300\nkey space up\nwait 12000\n')
 PY
+    # STARTMUS is where the start music is called; MSGOFF follows it
     emu $m -load-fd0 "$DSK" -input-script "$O/$m$v.txt" -audio-record-source mix \
-      -trap "xpc=0x$P$SW" -trap-range 1-1 -trap-audio-start "$O/$m$v.wav" \
-      -trap "xpc=0x$P$SX" -trap-range 1-1 -trap-audio-stop -trap "seconds=36" -trap-timeout 1 -timeout 80 >/dev/null 2>&1 &
+      -trap "xpc=0x$P$SB" -trap-range 1-1 -trap-audio-start "$O/$m$v.wav" \
+      -trap "xpc=0x$P$MO" -trap-range 1-1 -trap-audio-stop -trap "seconds=36" -trap-timeout 1 -timeout 80 >/dev/null 2>&1 &
   done
   wait
   for sc in c2:normal c3:normal c3:fast; do
     m=${sc%%:*}; v=${sc##*:}
     [ -f "$O/$m$v.wav" ] || { [ $m = c3 ] && ! have3 && continue; say FAIL "tune: $m $v: no sound recorded"; continue; }
-    r=$(python3 "$HERE/tools/tunecheck.py" "$O/$m$v.wav" "$(dirname "$SRC")/tables.inc" 2>&1 | tail -n 1)
-    if python3 "$HERE/tools/tunecheck.py" "$O/$m$v.wav" "$(dirname "$SRC")/tables.inc" >/dev/null 2>&1; then say PASS "tune: $m $v: $r"; else say FAIL "tune: $m $v: $(echo "$r" | cut -c1-160)"; fi
+    r=$(python3 "$HERE/tools/audiocheck.py" "$O/$m$v.wav" "$HERE/assets/audio/synth/snd00.bin" 2>&1 | tail -n 1)
+    if python3 "$HERE/tools/audiocheck.py" "$O/$m$v.wav" "$HERE/assets/audio/synth/snd00.bin" >/dev/null 2>&1; then say PASS "tune: $m $v: start music, the pitch of every tick is the stream's:$r"; else say FAIL "tune: $m $v: $(echo "$r" | cut -c1-160)"; fi
   done
 }
 
@@ -470,7 +477,7 @@ check_sound() {
   python3 -c 'import numpy' 2>/dev/null || { echo "SKIP sound (no numpy)"; return; }
   O=$D/sound; rm -rf "${O:?}"; mkdir -p "$O"
   botbuild || { say FAIL "sound: the autopilot build failed"; return; }
-  B=$D/bot; SY=$B/pakfan.sym; SX=$(s SWX "$SY"); WS=$(s WSPACE "$SY"); BS=$(s BSEED "$SY")
+  B=$D/bot; SY=$B/pakfan.sym; SX=$(s MSGOFF "$SY"); WS=$(s WSPACE "$SY"); BS=$(s BSEED "$SY")
   byte 1 > "$O/sd.bin"
   emu c2 -load-fd0 "$B/PAKFAN.DSK" -input-script "$WORK/start.txt" -audio-record-source mix \
     -trap "xpc=0x0$WS" -trap-range 1-1 -trap-load "$O/sd.bin,format=raw,addr=0x0$BS" \
@@ -489,9 +496,39 @@ sys.exit(0 if n >= 40 and loud >= 0.25 * n else 1)
 PY
 }
 
+# loader: RUN"PAKFAN" loads the logo, the audio engine (in 12 pieces, each copied up through all-RAM
+# mode) and the game: the engine must be in the upper 32K byte for byte, and the game must have
+# found it (HAVEAUD = 1). On a CoCo 2 and a CoCo 3.
+check_loader() {
+  O=$D/loader; rm -rf "${O:?}"; mkdir -p "$O"
+  HV=$(s HAVEAUD)
+  printf 'wait 3000\ntype RUN"PAKFAN"\\r\nwait 60000\n' > "$O/in.txt"
+  for m in c2 c3; do
+    [ $m = c3 ] && ! have3 && { echo "SKIP loader on CoCo 3 (no coco3.rom)"; continue; }
+    # not emu: the engine must come from the loader, not from a test shortcut
+    case $m in c2) mach="-machine cocous -ram 64";; c3) mach="-machine coco3";; esac
+    ( timeout 900 "$XROAR" -headless -rompath "$ROMS" $mach -load-fd0 "$DSK" -input-script "$O/in.txt" \
+        -trap "seconds=70" -trap-ram "$O/$m.ram" -trap-timeout 1 -timeout 120 >/dev/null 2>&1 ) &
+  done
+  wait
+  for m in c2 c3; do
+    [ $m = c3 ] && ! have3 && continue
+    b=0; [ $m = c3 ] && b=$((0x70000))
+    if python3 -I - "$O/$m.ram" "$HERE/dist/AUDIO.RAW" $b $((0x$HV)) <<'PY'
+import sys
+d = open(sys.argv[1], 'rb').read(); a = open(sys.argv[2], 'rb').read(); b, hv = int(sys.argv[3]), int(sys.argv[4])
+same = d[b + 0x8000:b + 0x8000 + len(a)] == a
+print('  engine in the upper 32K byte for byte: %s, HAVEAUD=%d' % (same, d[b + hv]))
+sys.exit(0 if same and d[b + hv] == 1 else 1)
+PY
+    then say PASS "loader: $m: RUN\"PAKFAN\" puts the engine in the upper 32K and the game finds it"
+    else say FAIL "loader: $m: the engine is not (all) there after RUN\"PAKFAN\""; fi
+  done
+}
+
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break basic fuzz speed tune sound lap title score eyes overrun protect
+[ $# -gt 0 ] || set -- break basic fuzz speed tune sound lap title score eyes overrun protect loader
 for c in "$@"; do
-  case $c in break|basic|fuzz|speed|tune|sound|lap|title|score|eyes|overrun|protect) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
+  case $c in break|basic|fuzz|speed|tune|sound|lap|title|score|eyes|overrun|protect|loader) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done
 exit $FAILED

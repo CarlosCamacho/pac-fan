@@ -11,7 +11,7 @@
 *
 * Controls: arrow keys. SPACE starts. BREAK returns to BASIC.
 * Needs a 32K CoCo 1, 2 or 3. A CoCo 3 gets SG12 from its GIME through $FF9C = 9 (found
-* with SGTEST; tried in XRoar and xroar-dev, not on hardware). Load: LOADM"PAKFAN":EXEC
+* with SGTEST; tried in XRoar and xroar-dev, not on hardware). Load: RUN"PAKFAN" (logo, progress bar, audio engine); LOADM"PAKFAN":EXEC plays the game without sound
 *
 * Memory: $0E00 BUF0, $1A00 BUF1, $2600 BG (background copy), code from $3200.
 
@@ -79,6 +79,23 @@ ST3
         lda     $FF23
         ora     #$08
         sta     $FF23
+* the audio engine lives in the upper 32K: the SAM to all-RAM mode ($FFDF), then look for its
+* signature. Not there (a 32K machine, or the game was LOADMed on its own): ROM mode again, no sound.
+        clr     HAVEAUD
+        sta     $FFDF
+        ldx     #$8000
+        ldd     ,x
+        cmpd    #$5046          ; 'P' 'F'
+        bne     NOAUD
+        ldd     2,x
+        cmpd    #$4101          ; 'A' 1
+        bne     NOAUD
+        inc     HAVEAUD
+        clr     CURAMB
+        jsr     $8004           ; the engine's own start
+        bra     AUDX
+NOAUD   sta     $FFDE
+AUDX
 * SG12: SAM V = 100, VDG semigraphics (mode bits 0)
         sta     $FFC5           ; V2 set
         sta     $FFC2           ; V1 clear
@@ -88,7 +105,6 @@ ST3
         sta     $FF22
         lda     #$5A
         sta     RND
-        clr     WAKAF
         clr     WAKAT
         clr     LEVEL
         clr     STARTLV
@@ -157,6 +173,8 @@ WSPACE  lbsr    WAITVS
         bne     WSPACE
         lda     #$FF
         sta     $FF02
+        lda     #2              ; the credit sound
+        lbsr    SNDB
         lda     LEVEL
         sta     STARTLV
         clr     SCORE
@@ -173,8 +191,8 @@ WSPACE  lbsr    WAITVS
         lda     #YELLOWC
         lbsr    MSG
         lbsr    DRAWALL
-        ldx     #TUNE
-        lbsr    SAWPLAY
+STARTMUS clra                   ; the start music (label: test hook)
+        lbsr    SNDB
         lbsr    MSGOFF
         bra     FRAME
 
@@ -212,6 +230,7 @@ GM1     lbsr    MOVEGHOST
         bne     GM1
         lbsr    FRIGHTTICK
         lbsr    MODETICK
+        lbsr    AMBIENT
         lda     IDLEDOT
         cmpa    #255
         beq     FR1
@@ -223,7 +242,16 @@ FR1     lbsr    COLLIDE
         cmpa    #1
         beq     DIED
 * level clear: flash, new maze (NEWLEVEL sets its ghost speed)
-LCLEAR  lbsr    PAUSE60         ; (label: test hook, level cleared)
+LCLEAR  lda     #$FE            ; (label: test hook, level cleared) every sound stops
+        lbsr    SNDS
+        clr     CURAMB
+        lbsr    PAUSE60
+        lda     LEVEL           ; the intermission music after every eighth maze
+        inca
+        anda    #7
+        bne     LC1
+        lda     #1
+        lbsr    SNDB
 LC1     lda     LEVEL           ; next maze; after the last, back to the first
         inca
         cmpa    #NLEV
@@ -237,7 +265,11 @@ LC2     sta     LEVEL
 
 DIED    lbsr    WAITVS          ; show the frame where the player was caught
         lbsr    FLIP
-        lbsr    DEATHSND
+        lda     #$FE            ; the death sound has the voices to itself
+        lbsr    SNDS
+        clr     CURAMB
+        lda     #3
+        lbsr    SNDB
         lbsr    DEATHFLASH      ; the maze flashes through every colour
         dec     LIVES
         lbsr    HUD
@@ -279,6 +311,13 @@ NLS2    sta     GSPD
         sta     WCOL
         lda     H_DOTS,y
         sta     DOTS
+        sta     DOTST
+        clrb                    ; a fifth of them: the siren steps up after each
+NL5     suba    #5
+        bcs     NL6
+        incb
+        bra     NL5
+NL6     stb     DOTSTEP
         ldd     H_EXITC,y
         std     EXITC           ; EXITC, EXITR
         lda     H_EXITY,y
@@ -405,6 +444,8 @@ EAT     ldu     #ENTS
         bra     EAT2
 EATP    ldd     #$0050          ; power pellet: 50, ghosts turn blue
         lbsr    ADDSCORE
+        lda     #8              ; the bonus sparkle
+        lbsr    SNDS
         lbsr    SCARE
 EAT2    lbsr    CLEARTILE       ; remove it from the background copy
         inc     DOTSEATEN
@@ -1380,50 +1421,81 @@ ADDSCORE
         adca    #0
         daa
         sta     SCORE
-        lbra    HUDS
+        lda     OLDS            ; 10,000 points: an extra life (the score only goes up)
+        bne     ASX
+        lda     SCORE
+        beq     ASX
+        lda     LIVES
+        cmpa    #9
+        bhs     ASX
+        inc     LIVES
+        lda     #5              ; the fanfare
+        lbsr    SNDS
+        lbra    HUD             ; the lives are drawn too
+ASX     lbra    HUDS
 
-* ---------------------------------------------------------------- sound (blocking, short)
-WAKA    lda     #4              ; four frames of sound
-        sta     WAKAF
-        lda     #$FE
-        sta     DACV
+* ---------------------------------------------------------------- sound
+* The sounds are made by the engine in the upper 32K (audio.asm; HAVEAUD = it is there). It
+* plays in the idle time of the frames (WAITV0), a tick a field.
+* SNDB: A = a sound that plays to its end (0-4); BREAK during it leaves the game.
+* SNDS: A = an effect that starts and plays on (5-9), a loop under the game (10-16), $FF = stop
+* the loop, $FE = stop everything.
+SNDB    tst     HAVEAUD
+        beq     SNX
+        jsr     $800A
+        bcs     SNQ
+SNX     rts
+SNQ     lbra    QUIT
+SNDS    tst     HAVEAUD
+        beq     SNX
+        jmp     $800A
+
+* WAKA: the eat sound, alternating two chirps
+WAKA    lda     #6
         com     WAKAT
         beq     WK1
-        lda     #56             ; "wa": high to low
-        ldb     #14
-        bra     WK2
-WK1     lda     #98             ; "ka": low to high
-        ldb     #-14
-WK2     sta     WAKAP
-        stb     WAKAD
-        rts
-GULP
+        inca
+WK1     bra     SNDS
+GULP                            ; a ghost eaten: the sound to its end (the arcade pauses here too)
         ifdef   OVR
         inc     EGUL
         endc
-        ldx     #60
-        ldy     #30
-        lbra    SWEEP
-DEATHSND
-        ldx     #30
-        ldy     #120
-        lbra    SWEEP
-* SWEEP: Y half-periods, starting at X delay units, each one unit longer
-SWEEP   lda     #$FE
-        sta     DACV
-SW1     lda     DACV
-        sta     $FF20
-        eora    #$FC            ; $FE <-> $02 (bit 1 stays high: RS-232 idle)
-        sta     DACV
-        tfr     x,d
-SW2     subd    #1
-        bne     SW2
-        leax    1,x
-        leay    -1,y
-        bne     SW1
-        lda     #$82
-        sta     $FF20
-        rts
+        lda     #4
+        bra     SNDB
+
+* AMBIENT: the loop under the game, once a frame: eyes if a ghost is eyes, else the blue-ghost
+* sound, else the siren (5 steps, one after each fifth of the dots)
+AMBIENT tst     HAVEAUD
+        beq     AMX
+        ldu     #ENTS+ESIZE
+        ldb     #4
+AM1     lda     E_MODE,u
+        cmpa    #2
+        beq     AMEYE
+        leau    ESIZE,u
+        decb
+        bne     AM1
+        ldd     FRIGHT
+        bne     AMFR
+        lda     DOTST
+        suba    DOTS            ; dots eaten
+        ldb     #10
+AM2     cmpb    #14
+        beq     AM3
+        suba    DOTSTEP
+        bcs     AM3
+        incb
+        bra     AM2
+AM3     tfr     b,a
+        bra     AM4
+AMEYE   lda     #16
+        bra     AM4
+AMFR    lda     #15
+AM4     cmpa    CURAMB
+        beq     AMX
+        sta     CURAMB
+        lbra    SNDS
+AMX     rts
 
 * ---------------------------------------------------------------- input
         ifdef   BOT
@@ -1693,6 +1765,7 @@ CHKBRK  lda     #$FB            ; BREAK: column 2, row 6
         beq     QUIT
         rts
 QUIT    lds     SAVES0          ; leave from anywhere
+        sta     $FFDE           ; the SAM back to ROM mode: BASIC is there again
         lda     #$82            ; DAC at rest (a sound may have been mid-wave)
         sta     $FF20
         lda     #2              ; text screen at $0400, SAM V = 0
@@ -1743,10 +1816,10 @@ PALRGB  fcb     $10,$3E,$0E,$21,$3F,$11,$2F,$26     ; RGB monitor
 * frame loop, READY!, the death flash, the pauses) goes through here, so BREAK is never
 * dead for longer than a frame. (CHKBRK clobbers A and B: callers keep nothing in them.)
 WAITVS  bsr     WAITV0
-        bra     CHKBRK
+        lbra    CHKBRK
 WAITV0  lda     $FF02           ; clear the field-sync flag, wait for the next (bounded)
-        tst     WAKAF
-        bne     WVS
+        tst     HAVEAUD
+        bne     WVA
         ldx     #0
 WV1     tst     $FF03
         bmi     WV2
@@ -1754,28 +1827,9 @@ WV1     tst     $FF03
         bne     WV1
 WV2     lda     $FF02
         rts
-* WVS: the eat sound, played in the time the frame would spend waiting anyway, so it
-* can never make a frame late. A square wave at WAKAP delay units a half-cycle (12
-* cycles a unit), polling the field-sync flag inside the delay; the pitch steps by
-* WAKAD each frame: falling for "wa", rising for "ka".
-WVS     lda     DACV
-        eora    #$FC            ; $FE <-> $02 (bit 1 stays high: RS-232 idle)
-        sta     DACV
-        sta     $FF20
-        ldb     WAKAP
-WVS1    tst     $FF03           ; 7
-        bmi     WVS2            ; 3
-        decb                    ; 2
-        bne     WVS1            ; 3 -> 15 cycles a unit
-        bra     WVS
-WVS2    lda     $FF02
-        lda     #$82
-        sta     $FF20
-        ldb     WAKAP
-        addb    WAKAD
-        stb     WAKAP
-        dec     WAKAF
-        rts
+* WVA: the audio engine plays through the wait (a tick, then samples until the sync), so a
+* sound can never make a frame late; it clears the flag and returns
+WVA     jmp     $8007
 
 FLIP    ldd     BACK            ; show the buffer just drawn
         cmpd    #BUF0
@@ -2016,6 +2070,8 @@ TK2     lda     #$FF
         lda     #NLEV
 TKD1    deca
         sta     LEVEL
+        lda     #9
+        lbsr    SNDS
         bra     SHOWLV
 TKUP    lda     LEVEL
         inca
@@ -2023,6 +2079,8 @@ TKUP    lda     LEVEL
         blo     TKU1
         clra
 TKU1    sta     LEVEL
+        lda     #9
+        lbsr    SNDS
 * SHOWLV: the two digits of "LEVEL nn" on the title
 SHOWLV  lbsr    LVDIG
         pshs    b
@@ -2165,45 +2223,6 @@ FILL3   ldx     #BUF0
 FL3     std     ,x++
         cmpx    #BG+3072
         blo     FL3
-        rts
-
-* SAWPLAY: two sawtooth voices through the DAC. X -> records of (samples, step1, step2),
-* ended by a count of 0. Each sample: add each step to its 16-bit phase, sum the two top bytes at
-* half amplitude. The loop below is 79 cycles a sample (11,328 Hz); gen.py's SAMPCYC
-* must match it. Blocking, interrupts already off.
-SAWPLAY clr     PH1
-        clr     PH1+1
-        clr     PH2
-        clr     PH2+1
-SWN     lbsr    CHKBRK          ; BREAK between notes (a tune is 4.8 s of blocking)
-        ldy     ,x++            ; sample count; 0 ends the tune
-        beq     SWX
-        ldd     ,x++
-        std     F1
-        ldd     ,x++
-        std     F2
-        pshs    x
-SL      ldd     PH1             ; 6
-        addd    F1              ; 7
-        std     PH1             ; 6
-        sta     TA              ; 5
-        ldd     PH2             ; 6
-        addd    F2              ; 7
-        std     PH2             ; 6
-        lsra                    ; 2
-        sta     TB              ; 5
-        lda     TA              ; 5
-        lsra                    ; 2
-        adda    TB              ; 5
-        anda    #$FC            ; 2
-        ora     #$02            ; 2  (bit 1: RS-232 out idles high)
-        sta     $FF20           ; 5
-        leay    -1,y            ; 5
-        bne     SL              ; 3  = 79
-        puls    x
-        bra     SWN
-SWX     lda     #$82            ; rest the DAC mid-scale
-        sta     $FF20
         rts
 
 * COPY3K: copy 3072 bytes from U to X with the stack: PULU D,X,Y / PSHS D,X,Y
@@ -2442,24 +2461,18 @@ MCOL    rmb     1
 MCOLB   rmb     1
 MPTR    rmb     2
 NROW    rmb     1
-WAKAF   rmb     1
-WAKAP   rmb     1
-WAKAD   rmb     1
 WAKAT   rmb     1
+HAVEAUD rmb     1               ; 1 = the audio engine is in the upper 32K
+CURAMB  rmb     1               ; the loop now playing under the game
+DOTST   rmb     1               ; dots in this maze
+DOTSTEP rmb     1               ; a fifth of them
 TPH     rmb     2
-PH1     rmb     2
-PH2     rmb     2
-F1      rmb     2
-F2      rmb     2
-TA      rmb     1
-TB      rmb     1
 MSGSAVE rmb     6*32
 MOFF    rmb     2
 ROFF    rmb     2
 HCNT    rmb     1
 ADDM    rmb     1
 ADDL    rmb     1
-DACV    rmb     1
 LEVEL   rmb     1
 STARTLV rmb     1
 LVP     rmb     2
