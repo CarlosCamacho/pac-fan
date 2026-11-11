@@ -385,7 +385,7 @@ PY
   else say FAIL "orch: without the cartridge rms=${r:-none} (want < 50); with it: $(python3 "$HERE/tools/audiocheck.py" "$O/cart.wav" "$HERE/assets/audio/synth/snd00.bin" 2>&1 | tail -n 1)"; fi
 }
 
-# chips: the Games Master (Multi-Pak slot 2), the Speech/Sound Cartridge (slot 1) and the CoCoXSID (slot 3) are
+# chips: the Games Master (Multi-Pak slot 2), the Speech/Sound Cartridge (slot 1) and the CoCoXSID (slot 4) are
 # not in the emulator (or not heard in a headless run), so the engine is built with -DTESTLOG, which logs every byte
 # it sends a chip, and the log is checked against the start music's stream (tools/chiplog.py). Also: with an empty
 # slot (no S/SC, no SID) the game must not hang, and with the GMC in an MPI slot it must not be frozen by the disk latch.

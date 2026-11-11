@@ -2226,7 +2226,7 @@ SS1     cmpb    #254            ; the CoCoXSID: SCS only, CTS stays
         bne     SS2
         ldb     SAVE7F
         andb    #$F0
-        orb     #2
+        orb     #3              ; slot 4: SCS = 3
 SS2     clr     MUXB
         cmpa    #2
         blo     SS3

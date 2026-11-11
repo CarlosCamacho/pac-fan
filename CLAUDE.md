@@ -127,8 +127,7 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
   a choice: `HAVEAUD` (the wrappers and `WAITV0` test it) is `ENGINE` and not OFF, and the engine's `A_SETMODE`
   ($8010: B = the engine's mode, A = the Multi-Pak value for `$FF7F`) switches output. Engine modes: 0 DAC,
   1 Orchestra-90, 2 Games Master (SN76489 at `$FF41`, **Multi-Pak slot 2**), 3 Speech/Sound Cartridge (AY through its
-  direct register mode, `$FF7D`/`$FF7E`, **slot 1**), 4 CoCoXSID (SID at `$FF40`+n, **slot 3: the owner did not say,
-  a guess, one constant: `SLOTV`**). `$FF7F` is read at `START` (`SAVE7F`) and a chip's slot is selected for the whole
+  direct register mode, `$FF7D`/`$FF7E`, **slot 1**), 4 CoCoXSID (SID at `$FF40`+n, **slot 4**, SCS = 3, set in `SNDSET`). `$FF7F` is read at `START` (`SAVE7F`) and a chip's slot is selected for the whole
   game (GMC `$11`, S/SC `$00`, SID: SCS only, CTS as found), put back by `QUIT`, which also quiets the chip.
 - The chips use the same ticks: `TICK` makes the three voices, then `CHIPSL` turns them into register writes (no
   samples: the rest of the field is idle) instead of the sample loop. A voice's period is `K24 / step` (a 24-bit by
