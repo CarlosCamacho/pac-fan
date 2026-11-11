@@ -120,7 +120,9 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
   0-63. A stick that is not there reads 0,0 (hard left and up), so nothing counts until it has been seen
   near the middle (`JSEEN`, cleared when CONTROL changes). In the game `READKEYS` adds the stick's
   directions to `E_WANT` when `OPTCTL` is 1; the arrow keys always work. The stick leaves the DAC at
-  rest and the mux on the DAC, as the sound engine needs.
+  rest and the mux on the DAC, as the sound engine needs. **`JOYXY` clears `$FF23` bit 3 (sound enable)
+  while it works**: the trial values go to the DAC, which is the speaker, and were heard as a buzz at
+  the frame rate (rms 446 in a silent menu; 0 now; `checks.sh joy` guards it).
 - SOUND: `SNDLIST` is the choices this build can make (ids into `SNDTX`: 0 DAC, 1 GMC, 2 SSC, 3 ORCH90,
   4 SIDX, 5 OFF); GMC, SSC and SIDX are in the menu's design but have no driver yet. `SNDSET` applies a
   choice: `HAVEAUD` (the wrappers and `WAITV0` test it) is `ENGINE` and not OFF, and the engine's

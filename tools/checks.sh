@@ -334,8 +334,11 @@ wait 9000
 EOF
   emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/menu.txt" -trap "seconds=22" -trap-ram "$O/menu.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
   emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/game.txt" -trap "seconds=28" -trap-ram "$O/game.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
+  # reading the stick works the DAC: the speaker must be off meanwhile (a silent menu with the stick on stays silent)
+  emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/menu.txt" -audio-record-source mix -trap "seconds=15" -trap-audio-start "$O/quiet.wav" \
+    -trap "seconds=18" -trap-audio-stop -trap "seconds=19" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
   wait
-  python3 -I - "$O" "$SYM" <<'PY' && say PASS "joystick: the stick moves the menu (down, right, fire) and steers the player" || say FAIL "joystick"
+  python3 -I - "$O" "$SYM" <<'PY' && say PASS "joystick: the stick moves the menu (down, right, fire), steers the player, and makes no noise" || say FAIL "joystick"
 import sys
 o = sys.argv[1]
 S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(sys.argv[2]) if len(l.split()) >= 3 and l.split()[1] == 'EQU'}
@@ -343,7 +346,11 @@ m = open(o + '/menu.ram', 'rb').read(); g = open(o + '/game.ram', 'rb').read()
 e = S['ENTS']
 got = (m[S['OPTCTL']], m[S['MSEL']], m[S['OPTSND']], g[e + 2], g[e + 3])
 print('  OPTCTL, MSEL, OPTSND, player dir, want: %s (wanted 1, 2, 5, 0, 0)' % (got,))
-sys.exit(0 if got == (1, 2, 5, 0, 0) else 1)
+import wave
+import numpy as np
+w = wave.open(o + '/quiet.wav'); x = np.frombuffer(w.readframes(w.getnframes()), dtype='<i2').astype(float)[int(0.3 * w.getframerate()):]
+print('  speaker rms while the stick is read in a silent menu: %.0f (want < 20)' % x.std())
+sys.exit(0 if got == (1, 2, 5, 0, 0) and x.std() < 20 else 1)
 PY
 }
 

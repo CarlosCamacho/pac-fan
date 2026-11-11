@@ -2238,7 +2238,11 @@ JD4     cmpa    #44
 JD5     rts
 
 * JOYXY: A = X, B = Y of the right stick, by successive approximation with the 6-bit DAC
-JOYXY   lda     $FF01
+JOYXY   lda     $FF23           ; the speaker off while the DAC is the comparator's reference,
+        sta     SV23            ; or every trial value is heard as a buzz at the frame rate
+        anda    #$F7
+        sta     $FF23
+        lda     $FF01
         anda    #$F7            ; axis X (CA2 = 0) of the right stick (CB2 = 0)
         sta     $FF01
         lda     $FF03
@@ -2256,6 +2260,8 @@ JOYXY   lda     $FF01
         sta     $FF01
         lda     #$82
         sta     $FF20
+        lda     SV23            ; the speaker back on
+        sta     $FF23
         puls    a
         rts
 JOYAX   clr     TMP2
@@ -2666,6 +2672,7 @@ SNDI    rmb     1               ; ...and its place in SNDLIST
 JSEEN   rmb     1
 TMP2    rmb     1
 SBIT    rmb     1
+SV23    rmb     1
 CURAMB  rmb     1               ; the loop now playing under the game
 DOTST   rmb     1               ; dots in this maze
 DOTSTEP rmb     1               ; a fifth of them
