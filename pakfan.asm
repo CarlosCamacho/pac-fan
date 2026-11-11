@@ -83,6 +83,25 @@ ST3
 * signature. Not there (a 32K machine, or the game was LOADMed on its own): ROM mode again, no sound.
         clr     HAVEAUD
         clr     ENGINE
+        clr     MUXB
+        lda     $FF7F           ; the Multi-Pak's slots as we found them (QUIT puts them back)
+        sta     SAVE7F
+        clr     MPIOK           ; is there a Multi-Pak? (the read-back probe: an empty bus cannot hold both patterns)
+        lda     #$30
+        sta     $FF7F
+        lda     $FF7F
+        anda    #$33
+        cmpa    #$30
+        bne     NOMPI
+        lda     #$03
+        sta     $FF7F
+        lda     $FF7F
+        anda    #$33
+        cmpa    #$03
+        bne     NOMPI
+        inc     MPIOK
+NOMPI   lda     SAVE7F
+        sta     $FF7F
         clr     MSEL
         clr     OPTCTL
         clr     OPTSND
@@ -1778,7 +1797,11 @@ CHKBRK  lda     #$FB            ; BREAK: column 2, row 6
         beq     QUIT
         rts
 QUIT    lds     SAVES0          ; leave from anywhere
-        sta     $FFDE           ; the SAM back to ROM mode: BASIC is there again
+        tst     ENGINE          ; a sound chip quiet, the Multi-Pak slots and the mux back as they were
+        beq     QT00
+        clr     OPTSND
+        lbsr    SNDSET
+QT00    sta     $FFDE           ; the SAM back to ROM mode: BASIC is there again
         lda     #$82            ; DAC at rest (a sound may have been mid-wave)
         sta     $FF20
         lda     #2              ; text screen at $0400, SAM V = 0
@@ -2076,11 +2099,10 @@ MD5     lda     MCLR
         rts
 ROWY    fcb     44,51,58,65
 MTXT    fdb     TPLAY,0,0,TABOUT
-* the sound choices in the order of the menu: DAC GMC SSC ORCH90 SIDX OFF; the ones this build
-* can make are in SNDLIST (ids into SNDTX)
-SNDTX   fdb     TSDAC,0,0,TSORC,0,TSOFF
-SNDLIST fcb     0,3,5
-SNDCNT  equ     3
+* the sound choices in the order of the menu: DAC GMC SSC ORCH90 SIDX OFF (ids into SNDTX)
+SNDTX   fdb     TSDAC,TSGMC,TSSSC,TSORC,TSSID,TSOFF
+SNDLIST fcb     0,1,2,3,4,5
+SNDCNT  equ     6
 
 * MENUIN: read the keys and the stick, and act on a press (not on a key held)
 MENUIN  clrb
@@ -2154,7 +2176,7 @@ MJ6     puls    b              ; CONTROL: any of left, right, press
         clr     JSEEN
         bra     MJX
 MJ7     puls    b              ; SOUND: left back, right and press forward
-        lda     SNDI
+MJ7R    lda     SNDI
         bitb    #4
         bne     MJ7B
         inca
@@ -2170,13 +2192,21 @@ MJ7C    sta     SNDI
         ldx     #SNDLIST
         lda     a,x
         sta     OPTSND
-        lbsr    SNDSET
+        tst     MPIOK           ; the GMC and the SID need a Multi-Pak: with the disk controller in the only
+        bne     MJ7E            ; slot their registers are the drive latch (a write can halt the machine)
+        cmpa    #1
+        beq     MJ7R
+        cmpa    #4
+        beq     MJ7R
+MJ7E    lbsr    SNDSET
 MJX     lda     #9              ; the bounce for every move
         lbsr    SNDS
         lbsr    MENUDRAW
         rts
 
-* SNDSET: OPTSND decides the engine's output (and whether there is sound at all)
+* SNDSET: OPTSND decides the engine's output (and whether there is sound at all). The engine's modes:
+* 0 DAC, 1 Orchestra-90, 2 Games Master (Multi-Pak slot 2), 3 Speech/Sound (slot 1), 4 CoCoXSID (slot 3,
+* a guess: the owner did not say). A chip's slot is selected for the whole game ($FF7F, restored by QUIT).
 SNDSET  clr     HAVEAUD
         tst     ENGINE
         beq     SSX
@@ -2184,13 +2214,31 @@ SNDSET  clr     HAVEAUD
         cmpb    #5              ; OFF
         beq     SSX
         inc     HAVEAUD
-        lda     #0              ; engine mode: 0 DAC, 1 Orchestra-90
-        cmpb    #3
+        ldx     #EMODE
+        lda     b,x             ; the engine's mode
+        ldx     #SLOTV
+        ldb     b,x             ; the $FF7F value: 255 = the one we found
+        cmpb    #255
         bne     SS1
-        lda     #1
-SS1     tfr     a,b
+        ldb     SAVE7F
+        bra     SS2
+SS1     cmpb    #254            ; the CoCoXSID: SCS only, CTS stays
+        bne     SS2
+        ldb     SAVE7F
+        andb    #$F0
+        orb     #2
+SS2     clr     MUXB
+        cmpa    #2
+        blo     SS3
+        pshs    a
+        lda     #8
+        sta     MUXB            ; a chip's sound comes by the cartridge line: CB2 high
+        puls    a
+SS3     exg     a,b             ; A = the $FF7F value, B = the mode
         jsr     $8010           ; A_SETMODE
 SSX     rts
+EMODE   fcb     0,2,3,1,4
+SLOTV   fcb     255,$11,$00,255,254
 
 * ABOUT: the story in SG24, page by page (the engine's code): any key or fire turns the page
 ABOUT   tst     ENGINE
@@ -2262,6 +2310,9 @@ JOYXY   lda     $FF23           ; the speaker off while the DAC is the comparato
         sta     $FF20
         lda     SV23            ; the speaker back on
         sta     $FF23
+        lda     $FF03           ; CB2 was cleared above: a sound chip needs it high
+        ora     MUXB
+        sta     $FF03
         puls    a
         rts
 JOYAX   clr     TMP2
@@ -2673,6 +2724,9 @@ JSEEN   rmb     1
 TMP2    rmb     1
 SBIT    rmb     1
 SV23    rmb     1
+MPIOK   rmb     1               ; 1 = a Multi-Pak answers at $FF7F
+MUXB    rmb     1               ; 8 when a sound chip is the sound
+SAVE7F  rmb     1
 CURAMB  rmb     1               ; the loop now playing under the game
 DOTST   rmb     1               ; dots in this maze
 DOTSTEP rmb     1               ; a fifth of them

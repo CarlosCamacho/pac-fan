@@ -109,7 +109,7 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
 ## The title menu (pakfan.asm: MENUDRAW, MENUIN) and the ABOUT story
 
 - Title: `PAK FAN BY CAMCO` on top, the chase, then four rows (element rows 44, 51, 58, 65):
-  `PLAY`, `CONTROL:KEYBOARD|JOYSTICK`, `SOUND:DAC|ORCH90|OFF`, `ABOUT`, and at the bottom
+  `PLAY`, `CONTROL:KEYBOARD|JOYSTICK`, `SOUND:DAC|GMC|SSC|ORCH90|SIDX|OFF`, `ABOUT`, and at the bottom
   `PROGRAMMER:` / `CARLOS CAMACHO` / `(C) 1984 CAMCO` (a row is 16 glyphs of 4 elements, so the
   programmer line is two). The selected row is white, the others yellow.
 - Keys: UP/DOWN pick a row; LEFT/RIGHT change it (CONTROL and SOUND cycle, wrapping
@@ -123,10 +123,31 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
   rest and the mux on the DAC, as the sound engine needs. **`JOYXY` clears `$FF23` bit 3 (sound enable)
   while it works**: the trial values go to the DAC, which is the speaker, and were heard as a buzz at
   the frame rate (rms 446 in a silent menu; 0 now; `checks.sh joy` guards it).
-- SOUND: `SNDLIST` is the choices this build can make (ids into `SNDTX`: 0 DAC, 1 GMC, 2 SSC, 3 ORCH90,
-  4 SIDX, 5 OFF); GMC, SSC and SIDX are in the menu's design but have no driver yet. `SNDSET` applies a
-  choice: `HAVEAUD` (the wrappers and `WAITV0` test it) is `ENGINE` and not OFF, and the engine's
-  `A_SETMODE` ($8010) takes 0 for the DAC, 1 for Orchestra-90.
+- SOUND: `SNDLIST` is the cycle (ids into `SNDTX`: 0 DAC, 1 GMC, 2 SSC, 3 ORCH90, 4 SIDX, 5 OFF). `SNDSET` applies
+  a choice: `HAVEAUD` (the wrappers and `WAITV0` test it) is `ENGINE` and not OFF, and the engine's `A_SETMODE`
+  ($8010: B = the engine's mode, A = the Multi-Pak value for `$FF7F`) switches output. Engine modes: 0 DAC,
+  1 Orchestra-90, 2 Games Master (SN76489 at `$FF41`, **Multi-Pak slot 2**), 3 Speech/Sound Cartridge (AY through its
+  direct register mode, `$FF7D`/`$FF7E`, **slot 1**), 4 CoCoXSID (SID at `$FF40`+n, **slot 3: the owner did not say,
+  a guess, one constant: `SLOTV`**). `$FF7F` is read at `START` (`SAVE7F`) and a chip's slot is selected for the whole
+  game (GMC `$11`, S/SC `$00`, SID: SCS only, CTS as found), put back by `QUIT`, which also quiets the chip.
+- The chips use the same ticks: `TICK` makes the three voices, then `CHIPSL` turns them into register writes (no
+  samples: the rest of the field is idle) instead of the sample loop. A voice's period is `K24 / step` (a 24-bit by
+  16-bit divide, `PERIOD`): GMC period (10 bits; lower notes are put an octave up), S/SC period (12 bits) with
+  the AY's mixer (noise voices on the noise generator), SID `Fn = step * 2.0639` with the sustain level as the volume.
+  All three need the sound mux on the cartridge line: CB2 high (`$FF03` bit 3) with CA2 low; `A_SETMODE` sets it and
+  `JOYXY` (which clears CB2) puts it back (`MUXB`).
+- **Hazards, handled:** the GMC and the SID answer in `$FF40`-`$FF5F`, where the disk controller's drive latch and
+  command register are: a write with bit 7 set **halts the CPU** (seen in xroar-dev with a plain disk cartridge).
+  So the menu skips GMC and SIDX unless a Multi-Pak answers (`MPIOK`, the read-back probe at `START`: `$30` and `$03`
+  read back through `$33`). The S/SC is waited for with a 50 ms limit per byte; if it never answers, the engine gives
+  up for good (`SSCD`) and the game goes on silent. `A_PLAY $FE` clears only the playing state (`$FD00`-`$FD2F`): it once
+  cleared the mode too, so the first death or level clear dropped any chosen output back to the DAC.
+- Testing the chips: the emulator's GMC is only heard with a real-time audio path (headless runs drop cartridge audio),
+  and has no S/SC or SID. So `audio.asm -DTESTLOG=1` logs every byte sent to a chip (`$0700`-`$0DEF`, a ring) and
+  `tools/chiplog.py` decodes the log and compares it with the start music's stream: `checks.sh chips` (GMC 96%,
+  S/SC 99%, SID 100% of the voices right; the misses are the ends of the ring). **Nothing was heard on any of the
+  three, and the SSC and SIDX registers are from the skill's documents, not a cartridge.** The GMC clock is taken
+  as 3.58 MHz (xroar-dev's chip is clocked at 4 MHz); the S/SC as 1.79 MHz (disputed in the skill); the SID at 1 MHz.
 - Orchestra-90: a second sample loop (`SLO`) writes `$FF7A` and `$FF7B` (both DACs, `$80` centre),
   116 cycles a sample, and `TICK` stretches every phase step by 116/111, so the pitch stays. It uses a
   second set of wave tables (`wavetbl8.bin`, every 8-bit step instead of multiples of 4), so its
@@ -142,7 +163,7 @@ LWASM=/path/to/lwasm ./build.sh      # gen.py -> tables.inc, then dist/PAKFAN.BI
   `font3x5.py`, shared with `gen.py`. Without the engine (32K, or no sound pack) ABOUT does nothing.
 - Every move plays the bounce (sound 9). Checks: `menu` (CONTROL, SOUND wrapping, ABOUT through to PLAY)
   and `joy` (a scripted stick, `-joy-right script`, moves the menu and the player); `orch` (ORCH90 is silent
-  with no cartridge in the Multi-Pak and right with one).
+  with no cartridge in the Multi-Pak and right with one), `chips` (the register logs of the GMC, S/SC and SID).
 
 ## Audio engine (audio.asm, assets/audio/, tools/mksynth.py)
 

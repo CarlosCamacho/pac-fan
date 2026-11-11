@@ -62,6 +62,24 @@ GROW    equ     $FD52
 TMPD    equ     $FD54
 TMPE    equ     $FD56
 LNP     equ     $FD58
+VINC    equ     $FD70           ; the voice being worked on: step (2), volume, wave, number
+VVOL    equ     $FD72
+VWAV    equ     $FD73
+VK      equ     $FD74
+NZON    equ     $FD75
+DV0     equ     $FD76           ; (three bytes) the dividend, then the quotient
+DV1     equ     $FD77
+DV2     equ     $FD78
+RM      equ     $FD79           ; (2) the remainder
+MIXR    equ     $FD7B
+SSCD    equ     $FD7C           ; the S/SC did not answer: no more tries
+SLOTCUR equ     $FD7D           ; the Multi-Pak value ($FF7F) the chip in use needs
+GP      equ     $FD7E           ; (2)
+GCH     equ     $FD80
+TMPB    equ     $FD81
+SB      equ     $FD82
+GQ      equ     $FD83           ; (2)
+K24     equ     909318          ; 111,861 * 65536 / 8062: period = K24 / step (the GMC and the S/SC)
 TBLBASE equ     $FD5A
 FOOTBUF equ     $FD60
 
@@ -77,7 +95,11 @@ AI1     sta     ,x+
 * A_PLAY
 A_PLAY  cmpa    #$FE
         bne     AP1
-        bsr     A_INIT
+        ldx     #$FD00          ; stop everything: the playing state only (the mode, the tables
+        clra                    ; and the chip's slot above $FD30 must stay)
+APS0    sta     ,x+
+        cmpx    #$FD30
+        bne     APS0
         rts
 AP1     cmpa    #$FF
         bne     AP2
@@ -151,8 +173,11 @@ SLICE   lda     $FF02           ; clear the field sync flag: this tick lasts unt
         ldx     <T1
         ldy     <T2
         ldu     <T3
-        tst     <AMODE
-        lbne    SLO
+        lda     <AMODE
+        beq     SL              ; 0: the 6-bit DAC
+        cmpa    #1
+        lbne    CHIPSL          ; 2-4: a sound chip
+        lbra    SLO             ; 1: Orchestra-90
 SL      ldd     <PH1            ; 5
         addd    <INC1           ; 6
         std     <PH1            ; 5
@@ -297,8 +322,9 @@ TK6     ldd     ,x
         leax    3,x
         dec     <CNT
         bne     TK6
-        tst     <AMODE
-        beq     TK8
+        lda     <AMODE
+        cmpa    #1
+        bne     TK8
         ldx     #INC1           ; Orchestra-90: step * 116/111 (about + 1/32 + 1/64)
         lda     #3
         sta     <CNT
@@ -346,13 +372,445 @@ CP1     lda     ,x+
 
 * A_SETMODE: B = 0 DAC, 1 Orchestra-90
 A_SETMODE
-        stb     >AMODE          ; (the caller's DP is not ours: extended)
+        pshs    a,b,x,y,u,dp
+        ldb     #DPV
+        tfr     b,dp
+        lda     <AMODE
+        cmpa    #2
+        blo     ASM0
+        lda     <SLOTCUR        ; the chip we are leaving: select its slot and quiet it
+        sta     $FF7F
+        lda     <AMODE
+        lbsr    SILENCE
+ASM0    lda     ,s              ; the new Multi-Pak value
+        ldb     1,s             ; the new mode
+        sta     $FF7F
+        sta     <SLOTCUR
+        stb     <AMODE
         ldx     #WAVETBL        ; the 6-bit DAC's tables, or the Orchestra-90's finer ones
-        tstb
-        beq     ASM1
+        cmpb    #1
+        bne     ASM1
         ldx     #WAVETBL8
-ASM1    stx     >TBLBASE
+ASM1    stx     <TBLBASE
+        lda     $FF03           ; CB2 high (with CA2 low) sends a cartridge's audio (a chip's) to the speaker
+        anda    #$F7
+        cmpb    #2
+        blo     ASM2
+        ora     #8
+ASM2    sta     $FF03
+        cmpb    #2
+        blo     ASMX
+        lbsr    CHIPINIT
+ASMX    puls    a,b,x,y,u,dp
         rts
+
+* ---- the sound chips: one tick of the voices becomes register writes ----
+* VOICE: voice VK's step, volume and wave
+VOICE   lda     <VK
+        asla
+        ldx     #INC1
+        ldd     a,x
+        std     <VINC
+        lda     <VK
+        ldb     #3
+        mul
+        ldx     #V0+2
+        lda     b,x
+        tfr     a,b
+        andb    #15
+        stb     <VVOL
+        lsra
+        lsra
+        lsra
+        lsra
+        sta     <VWAV
+        rts
+
+* PERIOD: D = K24 / VINC, the chip's period (24-bit by 16-bit, shift and subtract)
+PERIOD  lda     #K24/65536
+        sta     <DV0
+        lda     #(K24/256)&255
+        sta     <DV1
+        lda     #K24&255
+        sta     <DV2
+        ldd     #0
+        std     <RM
+        lda     #24
+        sta     <CNT
+PD1     asl     <DV2
+        rol     <DV1
+        rol     <DV0
+        rol     <RM+1
+        rol     <RM
+        ldd     <RM
+        subd    <VINC
+        blo     PD2
+        std     <RM
+        inc     <DV2
+PD2     dec     <CNT
+        bne     PD1
+        ldd     <DV1
+        rts
+
+* silence the chip of mode A (its slot is selected)
+SILENCE cmpa    #2
+        bne     SIL3
+        lda     #$9F            ; GMC: all four attenuations to 15
+        lbsr    GMW
+        lda     #$BF
+        lbsr    GMW
+        lda     #$DF
+        lbsr    GMW
+        lda     #$FF
+        lbra    GMW
+SIL3    cmpa    #3
+        bne     SIL4
+        lda     #$AF            ; S/SC: amplitudes 0, every tone and noise off
+        lbsr    SSCB
+        ldx     #SSCQ
+SIL3A   lda     ,x+
+        cmpa    #$FF
+        beq     SIL3B
+        lbsr    SSCB
+        bra     SIL3A
+SIL3B   lbra    SSCB
+SIL4    ldb     #4              ; SID: gates off, volume 0
+        clra
+        ldb     #4
+        lbsr    SIDW
+        ldb     #11
+        clra
+        lbsr    SIDW
+        ldb     #18
+        clra
+        lbsr    SIDW
+        ldb     #$18
+        clra
+        lbra    SIDW
+SSCQ    fcb     7,$3F,8,0,9,0,10,0,$FF
+
+* CHIPINIT: B = mode
+CHIPINIT
+        cmpb    #3
+        beq     CI3
+        cmpb    #4
+        beq     CI4
+        lda     #$9F            ; GMC (it powers up making noise): silence it first
+        lbsr    GMW
+        lda     #$BF
+        lbsr    GMW
+        lda     #$DF
+        lbsr    GMW
+        lda     #$FF
+        lbra    GMW
+CI3     clr     <SSCD           ; S/SC: reset it, then the AY: noise period 12, nothing sounding
+        lda     #1
+        sta     $FF7D
+        ldx     #3000
+CI3A    leax    -1,x
+        bne     CI3A
+        clr     $FF7D
+        ldx     #12000
+CI3B    leax    -1,x
+        bne     CI3B
+        lda     #$AF
+        lbsr    SSCB
+        lda     #6
+        lbsr    SSCB
+        lda     #12
+        lbsr    SSCB
+        ldx     #SSCQ
+CI3C    lda     ,x+
+        lbsr    SSCB
+        cmpa    #$FF
+        bne     CI3C
+        rts
+CI4     ldx     #SIDINI         ; SID: pulse width 50%, no envelope, volume 15
+CI4A    ldb     ,x+
+        cmpb    #$FF
+        beq     CI4B
+        lda     ,x+
+        pshs    x
+        lbsr    SIDW
+        puls    x
+        bra     CI4A
+CI4B    rts
+SIDINI  fcb     2,0,3,8,4,0,5,0,6,0,9,0,10,8,11,0,12,0,13,0,16,0,17,8,18,0,19,0,20,0,$18,$0F,$FF
+
+* a byte to the GMC (SN76489 at $FF41): it needs a moment between writes
+GMW
+        ifdef   TESTLOG
+        ldb     #1
+        lbsr    LOGW
+        endc
+        sta     $FF41
+        nop
+        nop
+        nop
+        nop
+        rts
+* a byte to the S/SC, waiting for BUSY* (not for ever: if nothing answers, it is given up)
+SSCB
+        ifdef   TESTLOG
+        pshs    b
+        ldb     #2
+        lbsr    LOGW
+        puls    b
+        endc
+        tst     <SSCD
+        bne     SSBX
+        pshs    x
+        ldx     #2500           ; about 50 ms: a PIC that is busy that long is not there
+SSB1    tst     $FF7E
+        bmi     SSB2
+        leax    -1,x
+        bne     SSB1
+        inc     <SSCD
+        puls    x,pc
+SSB2    sta     $FF7E
+        puls    x,pc
+SSBX    rts
+* SID register B <- A (the CoCoXSID answers at $FF40 + register)
+SIDW
+        ifdef   TESTLOG
+        pshs    a,b
+        tfr     b,a
+        ldb     #3
+        lbsr    LOGW
+        ldb     1,s
+        lda     ,s
+        pshs    a
+        ldb     #4
+        lbsr    LOGW
+        puls    a
+        puls    a,b
+        endc
+        ldx     #$FF40
+        abx
+        sta     ,x
+        nop
+        nop
+        rts
+
+CHIPSL
+        ifdef   TESTLOG
+        lda     <V0+2
+        ora     <V1+2
+        ora     <V2+2
+        anda    #15
+        sta     >LOGEN
+        clra
+        clrb
+        lbsr    LOGW
+        endc
+        lda     <AMODE
+        cmpa    #2
+        bne     CS3
+        lbsr    GMCOUT
+        bra     CSW
+CS3     cmpa    #3
+        bne     CS4
+        lbsr    SSCOUT
+        bra     CSW
+CS4     lbsr    SIDOUT
+CSW     tst     $FF03           ; no samples: the rest of the field is the chip's
+        bpl     CSW
+        lda     $FF02
+        rts
+
+GMCOUT  clr     <VK
+        clr     <NZON
+GM1     lbsr    VOICE
+        lda     <VK
+        asla
+        asla
+        asla
+        asla
+        asla
+        sta     <GCH
+        tst     <VVOL
+        beq     GMQ
+        lda     <VWAV
+        cmpa    #8
+        beq     GMN
+        lbsr    PERIOD
+GM1B    cmpd    #1023           ; the SN76489's 10 bits stop at about 109 Hz: lower notes an octave up
+        bls     GM2
+        lsra
+        rorb
+        bra     GM1B
+GM2     std     <GP
+        lda     <GP+1
+        anda    #15
+        ora     #$80
+        ora     <GCH
+        lbsr    GMW
+        lda     <GP
+        asla
+        asla
+        asla
+        asla
+        ldb     <GP+1
+        lsrb
+        lsrb
+        lsrb
+        lsrb
+        stb     <TMPB
+        ora     <TMPB
+        anda    #$3F
+        lbsr    GMW
+        lda     #15
+        suba    <VVOL
+        ora     #$90
+        ora     <GCH
+        lbsr    GMW
+        bra     GM3
+GMQ     lda     #$9F
+        ora     <GCH
+        lbsr    GMW
+        bra     GM3
+GMN     lda     #$9F            ; a noise voice: its tone is silent and the noise channel carries it
+        ora     <GCH
+        lbsr    GMW
+        lda     #$E5
+        lbsr    GMW
+        lda     #15
+        suba    <VVOL
+        ora     #$F0
+        lbsr    GMW
+        inc     <NZON
+GM3     inc     <VK
+        lda     <VK
+        cmpa    #3
+        blo     GM1
+        tst     <NZON
+        bne     GMX
+        lda     #$FF
+        lbsr    GMW
+GMX     rts
+
+SSCOUT  lda     #$AF            ; direct register access: (register, value) pairs until $FF
+        lbsr    SSCB
+        clr     <VK
+        lda     #$3F
+        sta     <MIXR
+SS1     lbsr    VOICE
+        tst     <VVOL
+        beq     SSQ
+        lda     <VWAV
+        cmpa    #8
+        beq     SSN
+        lbsr    PERIOD
+        cmpd    #4095
+        bls     SS2
+        ldd     #4095
+SS2     std     <GP
+        lda     <VK
+        asla
+        lbsr    SSCB            ; register 2k: fine period
+        lda     <GP+1
+        lbsr    SSCB
+        lda     <VK
+        asla
+        inca
+        lbsr    SSCB            ; register 2k+1: coarse
+        lda     <GP
+        lbsr    SSCB
+        ldb     <VK             ; mixer: tone k on
+        ldx     #SSBITS
+        lda     b,x
+        coma
+        anda    <MIXR
+        sta     <MIXR
+        bra     SS3
+SSN     ldb     <VK             ; mixer: noise k on
+        addb    #3
+        ldx     #SSBITS
+        lda     b,x
+        coma
+        anda    <MIXR
+        sta     <MIXR
+SS3     lda     <VK
+        adda    #8
+        lbsr    SSCB            ; amplitude
+        lda     <VVOL
+        lbsr    SSCB
+        bra     SS4
+SSQ     lda     <VK
+        adda    #8
+        lbsr    SSCB
+        clra
+        lbsr    SSCB
+SS4     inc     <VK
+        lda     <VK
+        cmpa    #3
+        lblo    SS1
+        lda     #7
+        lbsr    SSCB
+        lda     <MIXR
+        lbsr    SSCB
+        lda     #$FF
+        lbra    SSCB
+SSBITS  fcb     1,2,4,8,16,32
+
+SIDOUT  clr     <VK
+SD1     lbsr    VOICE
+        ldb     <VK
+        ldx     #SIDBASE
+        ldb     b,x
+        stb     <SB
+        ldd     <VINC           ; Fn = step * 2.0639 (8,062 Hz sampling to the SID's 1 MHz scale)
+        std     <GP
+        aslb
+        rola
+        std     <GQ
+        ldd     <GP
+        lsra
+        rorb
+        lsra
+        rorb
+        lsra
+        rorb
+        lsra
+        rorb
+        addd    <GQ
+        std     <GQ
+        lda     <GP
+        tfr     a,b
+        clra
+        addd    <GQ
+        std     <GP
+        lda     <GP+1
+        ldb     <SB
+        lbsr    SIDW            ; frequency lo
+        lda     <GP
+        ldb     <SB
+        incb
+        lbsr    SIDW            ; frequency hi
+        lda     <VVOL           ; sustain level = the volume (attack and decay 0)
+        asla
+        asla
+        asla
+        asla
+        ldb     <SB
+        addb    #6
+        lbsr    SIDW
+        ldb     <VWAV
+        ldx     #SIDWAV
+        lda     b,x
+        tst     <VVOL
+        beq     SD2
+        ora     #1              ; gate
+SD2     ldb     <SB
+        addb    #4
+        lbsr    SIDW
+        inc     <VK
+        lda     <VK
+        cmpa    #3
+        blo     SD1
+        rts
+SIDBASE fcb     0,7,14
+SIDWAV  fcb     $40,$10,$40,$10,$20,$10,$10,$10,$80
 
 * A_ABOUT: the story in SG24 (the screen at $0E00, which is the game's two buffers), a page at a time.
 * Any key or the fire button turns the page; after the last page it returns (C = 0), or at BREAK (C = 1).
@@ -560,6 +1018,25 @@ TD3     adda    #$30
 ABTFONT includebin "assets/audio/synth/about_font.bin"
 ABTPAGES includebin "assets/audio/synth/about_pages.bin"
 
+        ifdef   TESTLOG
+LOGP    equ     $FD90
+LOGEN   equ     $FD92
+* LOGW: log (B = type, A = byte) at $0700 up, for tests (the register stream of a sound chip)
+LOGW    pshs    x,a,b
+        tst     >LOGEN
+        beq     LW9
+        ldx     >LOGP
+        cmpx    #$0700
+        bhs     LW1
+        ldx     #$0700
+LW1     cmpx    #$0DF0
+        blo     LW2
+        ldx     #$0700          ; (a ring: the newest stays)
+LW2     stb     ,x+
+        sta     ,x+
+        stx     >LOGP
+LW9     puls    x,a,b,pc
+        endc
 WAVETBL includebin "assets/audio/synth/wavetbl.bin"
 WAVETBL8 includebin "assets/audio/synth/wavetbl8.bin"
         include "assets/audio/synth/audio_data.inc"

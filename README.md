@@ -9,8 +9,9 @@ A maze-chase game in SG12 (64x96 elements, 8 colours), 6809 assembly, by Carlos 
                             options on the title menu
 
 The title is a menu: PLAY (always from level 1), CONTROL (keyboard or the right joystick),
-SOUND (the 6-bit DAC, Orchestra-90, or off) and ABOUT (the story, a page at a time in SG24; any key or
-fire turns the page). UP/DOWN pick a row, SPACE, ENTER or fire do it. More sound hardware is to come.
+SOUND (the 6-bit DAC, Games Master Cartridge in Multi-Pak slot 2, Speech/Sound Cartridge in slot 1, Orchestra-90, CoCoXSID in slot 3, or off) and ABOUT (the story, a page at a time in SG24; any key or
+fire turns the page). UP/DOWN pick a row, SPACE, ENTER or fire do it. The GMC and CoCoXSID are offered only with a Multi-Pak.
+The three sound chips are untested on real hardware (the S/SC and the CoCoXSID not in the emulator at all).
 
 Needs a 64K CoCo 1 or 2, or a CoCo 3. The sounds are played by an engine in the upper 32K
 (all-RAM mode, switched on while the game runs and off again when it ends), which only

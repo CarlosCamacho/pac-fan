@@ -32,6 +32,8 @@ hop, win = sr / 60.0, int(0.08 * sr)
 
 def present(seg, f):
     """Is there a clear peak of the spectrum at f (within 4% or 10 Hz)?"""
+    if seg.std() < 100:                          # silence has no peak (and a flat spectrum would pass)
+        return False
     sp = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), 8 * len(seg)))
     fr = np.fft.rfftfreq(8 * len(seg), 1 / sr)
     band = (abs(fr - f) <= max(0.04 * f, 10))

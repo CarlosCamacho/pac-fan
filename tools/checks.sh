@@ -298,14 +298,14 @@ move 32767 65535
 wait 600
 move 32767 32767
 wait 600
-move 65535 32767
+move 0 32767
 wait 600
 move 32767 32767
 wait 600
 down
 wait 400
 up
-wait 800
+wait 6000
 EOF
   cat > "$O/game.txt" <<'EOF'
 wait 3000
@@ -335,8 +335,8 @@ EOF
   emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/menu.txt" -trap "seconds=22" -trap-ram "$O/menu.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
   emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/game.txt" -trap "seconds=28" -trap-ram "$O/game.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
   # reading the stick works the DAC: the speaker must be off meanwhile (a silent menu with the stick on stays silent)
-  emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/menu.txt" -audio-record-source mix -trap "seconds=15" -trap-audio-start "$O/quiet.wav" \
-    -trap "seconds=18" -trap-audio-stop -trap "seconds=19" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
+  emu c2 -joy-right script -load-fd0 "$DSK" -input-script "$O/menu.txt" -audio-record-source mix -trap "seconds=20" -trap-audio-start "$O/quiet.wav" \
+    -trap "seconds=23" -trap-audio-stop -trap "seconds=24" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
   wait
   python3 -I - "$O" "$SYM" <<'PY' && say PASS "joystick: the stick moves the menu (down, right, fire), steers the player, and makes no noise" || say FAIL "joystick"
 import sys
@@ -345,26 +345,30 @@ S = {l.split()[0]: int(l.split('$')[1], 16) for l in open(sys.argv[2]) if len(l.
 m = open(o + '/menu.ram', 'rb').read(); g = open(o + '/game.ram', 'rb').read()
 e = S['ENTS']
 got = (m[S['OPTCTL']], m[S['MSEL']], m[S['OPTSND']], g[e + 2], g[e + 3])
-print('  OPTCTL, MSEL, OPTSND, player dir, want: %s (wanted 1, 2, 5, 0, 0)' % (got,))
+print('  OPTCTL, MSEL, OPTSND, player dir, want: %s (wanted 1, 2, 0, 0, 0)' % (got,))
 import wave
 import numpy as np
 w = wave.open(o + '/quiet.wav'); x = np.frombuffer(w.readframes(w.getnframes()), dtype='<i2').astype(float)[int(0.3 * w.getframerate()):]
 print('  speaker rms while the stick is read in a silent menu: %.0f (want < 20)' % x.std())
-sys.exit(0 if got == (1, 2, 5, 0, 0) and x.std() < 20 else 1)
+sys.exit(0 if got == (1, 2, 0, 0, 0) and x.std() < 20 else 1)
 PY
 }
 
-# orch: with SOUND set to ORCH90 the sound must leave by the Orchestra-90's DACs, not the 6-bit one (a missing
+# orch: (no Multi-Pak here, so the cycle skips the GMC and SIDX: two presses reach ORCH90) with SOUND set to ORCH90 the sound must leave by the Orchestra-90's DACs, not the 6-bit one (a missing
 # direct-page prefix once left the engine in DAC mode and nobody heard the difference): silent with no cartridge
 # in the Multi-Pak, the start music right with it.
 check_orch() {
   python3 -c 'import numpy' 2>/dev/null || { echo "SKIP orch (no numpy)"; return; }
   O=$D/orch; rm -rf "${O:?}"; mkdir -p "$O"
   SB=$(s STARTMUS); MO=$(s MSGOFF)
-  printf 'wait 3000\ntype LOADM"PAKFAN":EXEC\\r\nwait 7000\nkey down down\nwait 200\nkey down up\nwait 400\nkey down down\nwait 200\nkey down up\nwait 400\nkey right down\nwait 200\nkey right up\nwait 800\nkey up down\nwait 200\nkey up up\nwait 400\nkey up down\nwait 200\nkey up up\nwait 600\nkey space down\nwait 300\nkey space up\nwait 9000\n' > "$O/in.txt"
+  R='key right down\nwait 200\nkey right up\nwait 300\n'
+  P='wait 3000\ntype LOADM"PAKFAN":EXEC\\r\nwait 7000\nkey down down\nwait 200\nkey down up\nwait 400\nkey down down\nwait 200\nkey down up\nwait 400\n'
+  Q='wait 800\nkey up down\nwait 200\nkey up up\nwait 400\nkey up down\nwait 200\nkey up up\nwait 600\nkey space down\nwait 300\nkey space up\nwait 9000\n'
+  printf "$P$R$R${Q}" > "$O/in_none.txt"      # no Multi-Pak: the cycle skips the GMC: DAC, SSC, ORCH90
+  printf "$P$R$R$R${Q}" > "$O/in_cart.txt"    # a Multi-Pak: DAC, GMC, SSC, ORCH90
   for v in none cart; do
     x=""; [ $v = cart ] && x="-cart mpi -mpi-load-cart rsdos -mpi-load-cart orch90 -mpi-slot 0"
-    emu c2 $x -load-fd0 "$DSK" -input-script "$O/in.txt" -audio-record-source mix \
+    emu c2 $x -load-fd0 "$DSK" -input-script "$O/in_$v.txt" -audio-record-source mix \
       -trap "xpc=0x0$SB" -trap-range 1-1 -trap-audio-start "$O/$v.wav" \
       -trap "xpc=0x0$MO" -trap-range 1-1 -trap-audio-stop -trap "seconds=30" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
   done
@@ -381,13 +385,46 @@ PY
   else say FAIL "orch: without the cartridge rms=${r:-none} (want < 50); with it: $(python3 "$HERE/tools/audiocheck.py" "$O/cart.wav" "$HERE/assets/audio/synth/snd00.bin" 2>&1 | tail -n 1)"; fi
 }
 
+# chips: the Games Master (Multi-Pak slot 2), the Speech/Sound Cartridge (slot 1) and the CoCoXSID (slot 3) are
+# not in the emulator (or not heard in a headless run), so the engine is built with -DTESTLOG, which logs every byte
+# it sends a chip, and the log is checked against the start music's stream (tools/chiplog.py). Also: with an empty
+# slot (no S/SC, no SID) the game must not hang, and with the GMC in an MPI slot it must not be frozen by the disk latch.
+check_chips() {
+  O=$D/chips; rm -rf "${O:?}"; mkdir -p "$O"
+  "$LWASM" -9 -DTESTLOG=1 --format=decb -o "$O/AUDTEST.BIN" "$HERE/audio.asm" || { say FAIL "chips: the test build of the engine failed"; return; }
+  python3 -I - "$O" <<'PY'
+import sys
+o = sys.argv[1]
+d = open(o + '/AUDTEST.BIN', 'rb').read(); n = d[1] * 256 + d[2]
+open(o + '/AUDTEST.RAW', 'wb').write(d[5:5 + n])
+base = open(sys.argv[1] + '/../../../../tools/emu.sh').read() if False else None
+for name, times in (('gmc', 1), ('ssc', 2), ('sid', 4)):
+    L = ['wait 3000', 'type LOADM"PAKFAN":EXEC\\r', 'wait 7000', 'key down down', 'wait 200', 'key down up', 'wait 400', 'key down down', 'wait 200', 'key down up', 'wait 400']
+    for _ in range(times):
+        L += ['key right down', 'wait 200', 'key right up', 'wait 400']
+    L += ['wait 400', 'key up down', 'wait 200', 'key up up', 'wait 400', 'key up down', 'wait 200', 'key up up', 'wait 600', 'key space down', 'wait 300', 'key space up', 'wait 9000']
+    open('%s/%s.txt' % (o, name), 'w').write('\n'.join(L) + '\n')
+PY
+  for c in gmc ssc sid; do
+    # the disk in MPI slot 1, the GMC in slot 2 (the S/SC and the SID slots are empty: nothing may hang)
+    timeout 900 "$XROAR" -headless -rompath "$ROMS" -machine cocous -ram 64 -cart mpi -mpi-load-cart 0=rsdos -mpi-load-cart 1=gmc -mpi-slot 0 \
+      -load-ram "$O/AUDTEST.RAW,addr=0x8000" -load-fd0 "$DSK" -input-script "$O/$c.txt" -trap "seconds=18" -trap-ram "$O/$c.ram" -trap-timeout 1 -timeout 60 >/dev/null 2>&1 &
+  done
+  wait
+  for c in gmc ssc sid; do
+    [ -f "$O/$c.ram" ] || { say FAIL "chips: $c: the game did not get as far as the start music (hung?)"; continue; }
+    r=$(python3 "$HERE/tools/chiplog.py" "$O/$c.ram" $c 2>&1 | tail -n 1)
+    if python3 "$HERE/tools/chiplog.py" "$O/$c.ram" $c >/dev/null 2>&1; then say PASS "chips: $r"; else say FAIL "chips: $r"; fi
+  done
+}
+
 # menu: UP/DOWN pick a row (PLAY starts the game at level 1), LEFT/RIGHT change CONTROL (keyboard/joystick) and SOUND (DAC, Orchestra-90, OFF,
 # wrapping both ways), ENTER on ABOUT shows the story (any key turns the pages, then back at the menu).
 check_menu() {
   O=$D/menu; rm -rf "${O:?}"; mkdir -p "$O"
   n=0
   # keys : OPTCTL OPTSND HAVEAUD STARTLV (-1: not checked)
-  for sc in "down,right:1:0:1:-1" "down,down,right:0:3:1:-1" "down,down,right,right:0:5:0:-1" "down,down,right,right,right:0:0:1:-1" "down,down,left:0:5:0:-1" \
+  for sc in "down,right:1:0:1:-1" "down,down,right:0:1:1:-1" "down,down,right,right:0:2:1:-1" "down,down,right,right,right:0:3:1:-1" "down,down,right,right,right,right:0:4:1:-1" "down,down,right,right,right,right,right:0:5:0:-1" "down,down,right,right,right,right,right,right:0:0:1:-1" "down,down,left:0:5:0:-1" \
             "down,down,down,enter,a,a,up,up,up,space:0:0:1:0"; do
     n=$((n + 1)); echo "${sc#*:}" > "$O/want$n"
     python3 -I - "$O/in$n.txt" "${sc%%:*}" <<'PY'
@@ -398,7 +435,8 @@ for k in keys:
     L += ['key %s down' % k, 'wait 300', 'key %s up' % k, 'wait 1200' if k in ('enter', 'a') else 'wait 300']
 open(out, 'w').write('\n'.join(L + ['wait 6000']) + '\n')
 PY
-    emu c2 -load-fd0 "$DSK" -input-script "$O/in$n.txt" -trap "seconds=44" -trap-ram "$O/r$n.ram" -trap-timeout 1 -timeout 80 >/dev/null 2>&1 &
+    # in a Multi-Pak with the GMC in slot 2: the sound chips are chosen too, and a GMC write must not meet the disk latch
+    emu c2 -cart mpi -mpi-load-cart 0=rsdos -mpi-load-cart 1=gmc -mpi-slot 0 -load-fd0 "$DSK" -input-script "$O/in$n.txt" -trap "seconds=44" -trap-ram "$O/r$n.ram" -trap-timeout 1 -timeout 80 >/dev/null 2>&1 &
   done
   wait
   python3 -I - "$O" "$SYM" $n <<'PY' && say PASS "menu: CONTROL and SOUND change, ABOUT pages through and comes back, PLAY starts" || say FAIL "menu"
@@ -634,8 +672,8 @@ PY
 }
 
 [ -f "$SYM" ] && [ -f "$DSK" ] || { echo "build first: ./build.sh"; exit 2; }
-[ $# -gt 0 ] || set -- break basic fuzz speed tune orch sound lap menu joy score eyes overrun protect loader
+[ $# -gt 0 ] || set -- break basic fuzz speed tune orch chips sound lap menu joy score eyes overrun protect loader
 for c in "$@"; do
-  case $c in break|basic|fuzz|speed|tune|orch|sound|lap|menu|joy|score|eyes|overrun|protect|loader) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
+  case $c in break|basic|fuzz|speed|tune|orch|chips|sound|lap|menu|joy|score|eyes|overrun|protect|loader) "check_$c";; *) echo "unknown check: $c"; exit 2;; esac
 done
 exit $FAILED
