@@ -8,9 +8,9 @@ original (`assets/audio/`, designed by the owner; the sound packs that came from
 `README.md` describes the game. This file is how to work on it.
 
 The owner, the other projects, the toolchain and the open threads from the earlier chat session
-that built all this are in the handoff file, imported here:
+that built all this are in the owner notes (the old HANDOFF.md, moved to docs/OWNER-NOTES.md), imported here:
 
-@HANDOFF.md
+@docs/OWNER-NOTES.md
 
 ## Build
 
