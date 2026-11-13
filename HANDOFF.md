@@ -1,11 +1,12 @@
 # Current Baton Pass
-- **Current State:** `main` builds cleanly and all 33 `tools/checks.sh` checks pass in xroar-dev (not on real hardware). The game has a title menu (PLAY, CONTROL keyboard/joystick, SOUND, ABOUT story), a 3-voice audio engine in the upper 32K (DAC, Orchestra-90, and GMC/SSC/SIDX register output), a logo loader (`RUN"PAKFAN"`), and 40 levels.
-- **Immediate Next Step:**
-  - GitHub issue #3 (loader shows no readable error on a CoCo 3 when a file is missing): needs a way other than `ON ERR GOTO`.
-  - GitHub issue #1 (cycle rules): the profile shows the game logic is only about 22% of the cycles, so little is left to gain; close it or apply only what a profile justifies.
-  - Hear the GMC, SSC and SIDX output on real hardware (SSC and SIDX registers are from the skill documents; GMC is slot 2, SSC slot 1, SIDX slot 4).
+- **Current State:** `main` builds cleanly and all 33 `tools/checks.sh` checks pass in xroar-dev (not on real hardware). Game: title menu (PLAY, CONTROL, SOUND, ABOUT), 3-voice audio engine in the upper 32K (DAC, Orchestra-90, GMC/SSC/SIDX), logo loader `RUN"PAKFAN"`, 40 levels. Issues #1 and #2 are closed.
+- **Immediate Next Step:** Issue #5 `[Optimize]` DAC noise (the owner reported it): measure the noise sources, then try table interpolation / smoother volume. Keep `LOOP_CYCLES` (111) in sync between `audio.asm` and `tools/mksynth.py`.
+  - Then, in order: #3 loader error on a CoCo 3, #6 BREAK during loading, #7 CoCo 3 logo flash, #8 chip clocks, #4 stale docs.
+  - Owner/hardware items: #9 hardware test pass, #10 fire-button phantom keys, #11 difficulty re-rank, #12 more levels, #13 pitch check for all 17 sounds.
 - **Dead Ends / Do Not Repeat:**
-  - `ON ERR GOTO` in the BASIC loader: it does not trap `LOADM` on xroar-dev's CoCo 3 (the program ends silently) and does nothing on a CoCo 2.
-  - Writing the GMC/SID registers (`$FF40`-`$FF5F`) with a plain disk controller in the slot halts the CPU; they are offered only when a Multi-Pak answers.
-  - Playing chip sound in a headless xroar run: cartridge audio is dropped, so the chips are checked from a register log (`checks.sh chips`).
+  - `ON ERR GOTO` in the BASIC loader: it does not trap `LOADM` on xroar-dev's CoCo 3 (program ends silently) and does nothing on a CoCo 2 (#3, #6).
+  - Writing `$FF40`-`$FF5F` (GMC/SID) with a plain disk controller in the slot halts the CPU: only offered when a Multi-Pak answers.
+  - Headless xroar runs drop cartridge audio: chips are checked from a register log (`checks.sh chips`).
+  - A missing `>` in `audio.asm` entry points (DP is 0 there) once broke the output mode; use extended addressing.
+  - Sed/regex edits on `pakfan.asm`: check `git diff` (one `orb #2` in the wall code was hit by mistake once).
 - **Verification:** Run `LWASM=/path/to/lwasm ./build.sh && tools/checks.sh` and confirm zero errors and no FAIL lines before committing.
