@@ -1,8 +1,8 @@
 # Handoff from the earlier chat session (October 2026)
 
-This file carries a long earlier working session over to this repository. `CLAUDE.md` covers
+This file carries a long earlier working session over to this repository. `AGENTS.md` covers
 how to work on PAK FAN itself; this file covers who the owner is, what else was built, the
-tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kept current.
+tools, and what is still open. Where the two overlap, `AGENTS.md` is the one kept current.
 
 ## The owner
 
@@ -23,7 +23,7 @@ tools, and what is still open. Where the two overlap, `CLAUDE.md` is the one kep
 
 | What | Where | State |
 |---|---|---|
-| **PAK FAN** (SG12 maze game, CoCo 1/2) | this repo | 40 levels, played in order easiest to hardest; see `CLAUDE.md` |
+| **PAK FAN** (SG12 maze game, CoCo 1/2) | this repo | 40 levels, played in order easiest to hardest; see `AGENTS.md` |
 | Maze editor (HTML) | `editor/maze-editor.html`; also published as a web artifact | Saves project JSON; the owner designs levels in it |
 | **SGTEST** (SG8/12/24 test cards, CoCo 2 and 3) | `assets/sgtest/` inside the **coco-hardware** skill (v3.26) | Done; results below |
 | GHOSTS demo (the stack-blast SG12 technique PAK FAN grew from) | not in a repo; `ghosts-src.zip` was delivered in chat | Done |
@@ -89,7 +89,7 @@ complete skill as a zip.
 
 Done on October 22: blue time by level (6 s down to 2 s), the door in the death
 flash with no white (speed kept at 4 frames a color), CoCo 3 support through `$FF9C` with a
-CoCo 2-matching palette, and coco3-assembly v3.26. See `CLAUDE.md`.
+CoCo 2-matching palette, and coco3-assembly v3.26. See `AGENTS.md`.
 
 Done on November 6 ("harden existing features"): BREAK now works everywhere (it was dead for
 the 4.8 s tune and for the death flash and READY!); CoCo 3 high speed no longer doubles the
@@ -113,7 +113,7 @@ checks (`protect`, `title`, `score`, `eyes`), each shown to fail on a deliberate
 Third hardening pass, November 6: one real bug. After BREAK, BASIC only worked for immediate
 commands: a typed program listed as garbage or would not run, because the game's screens sit on
 BASIC's program area and had overwritten the empty-program marker. `QUIT` now restores it
-(`CLAUDE.md`, "BASIC after BREAK"); the `basic` check guards it on a CoCo 2 and a CoCo 3.
+(`AGENTS.md`, "BASIC after BREAK"); the `basic` check guards it on a CoCo 2 and a CoCo 3.
 
 Fourth pass, November 7: sound, never checked before. The intro tune was recorded from the speaker
 mix and every note's pitch measured against the table: worst error 0.25% on a CoCo 2, a CoCo 3,
@@ -136,5 +136,5 @@ Sounds, November 8: the owner sent a pack of sounds rendered from the arcade ROM
 and the Namco waveform PROM (`start_music`, `siren_1`... ). Declined four times, including a request to change
 the rules to allow it. He then sent an original set (`assets/audio/`, `build_audio.py` makes it from notes and
 sweeps) and asked for a 2-3 voice synth with all RAM mode; that is `audio.asm`
-(CLAUDE.md, "Audio engine"). The old two-voice sawtooth tune, `SAWPLAY`, the wa-ka and `SWEEP`
+(AGENTS.md, "Audio engine"). The old two-voice sawtooth tune, `SAWPLAY`, the wa-ka and `SWEEP`
 are gone. Nothing has been heard on real hardware.
