@@ -269,6 +269,19 @@ python3 tools/botdiff.py OLD_DIR OLD.sym NEW_DIR NEW.sym   # did an edit change 
   name may or may not get a digit appended, so glob for it.
 - Headless runs can't be heard. Sound pitch comes from the engine's sample loop (111 cycles,
   `LOOP_CYCLES` in `tools/mksynth.py` must match it).
+- **Profiling** (xroar-dev): `-profile-range NAME=LO-HI` (at most about 64 ranges; physical addresses) counts the
+  cycles in a range, `-profile-hist N` the top PCs; the report cycles are 14.318 MHz ticks (divide by 16 for CPU
+  cycles). Measured on 36 s of random-key play (seed 21): the engine takes 78% of all cycles (idle time:
+  sample loop), the game code 22%; per frame the game logic is a few thousand cycles of a 14,935-cycle field, so
+  the idle part of a field (where effects and loops sound) is already about 80% in play. The biggest game
+  routines are `RENDER`, `DRAWENT`/`GSPRITE` and `MOVEGHOST`; `WALLCOL` is the maze build at each level start.
+  Compare builds by the `GAME` range total of the same keyplay script (the game is deterministic by frame).
+- **Branch lengths**: 32 of the 171 `lbsr`/`lbra`/`lbcc` in `pakfan.asm` fit as short branches in the real, `-DBOT=1`
+  and `-DOVR=1` builds and are short; the rest are out of range. Adding code can push a short one out of range: the
+  assembler says `Byte overflow`; make that one long.
+- `ON ERR GOTO` does not trap a `LOADM` error on xroar-dev's CoCo 3 (it ends the program silently) and does nothing on a
+  CoCo 2, so the loader has no error handler. A missing file in `RUN"PAKFAN"` shows BASIC's `?NE ERROR` on a
+  CoCo 2 (it resets the display) but not on a CoCo 3 (the GIME stays in `$FF9C` = 10).
 - **Nothing has run on real hardware yet.** Say so when reporting results.
 
 ## Traps already hit in this code

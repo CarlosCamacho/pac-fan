@@ -281,7 +281,7 @@ LC1     lda     LEVEL           ; next maze; after the last, back to the first
         sta     LAP
         clra
 LC2     sta     LEVEL
-        lbsr    NEWLEVEL
+        bsr     NEWLEVEL
         lbra    NEWLIFE
 
 DIED    lbsr    WAITVS          ; show the frame where the player was caught
@@ -359,8 +359,7 @@ NL6     stb     DOTSTEP
         lbsr    SETF
         ldd     #BUF1
         std     BACK
-        lbsr    HUD
-        rts
+        lbra    HUD
 
 RESETPOS
         ldu     #ENTS
@@ -534,7 +533,7 @@ MGREV   clr     E_MODE,u        ; (label: test hook, eyes revived)
         sta     E_HOUSE,u
         lda     #2              ; facing up, towards the door
         sta     E_DIR,u
-        lbsr    SPDFOR
+        bsr     SPDFOR
         sta     E_SPD,u
         bra     MG2
 MGH     tst     E_HOUSE,u       ; through the door and out: an ordinary ghost again
@@ -543,7 +542,7 @@ MGH     tst     E_HOUSE,u       ; through the door and out: an ordinary ghost ag
         cmpa    EXITY
         bne     MG2
 MGOUT   clr     E_HOUSE,u       ; (label: test hook, out of the house)
-MG2     lbsr    CHOOSE
+MG2     bsr     CHOOSE
 MG3     lbsr    COST
         nega
         adda    E_ACC,u
@@ -605,7 +604,7 @@ CH1     ldx     #ORDER
         ldb     CHN
         lda     b,x
         sta     TRY
-        lbsr    CHOK
+        bsr     CHOK
         bne     CH2
         lbsr    DIST2           ; D = squared distance from the next tile
         cmpd    BESTD
@@ -707,7 +706,7 @@ TGP     cmpa    #1
         bne     TGI
         lda     #4              ; pink: 4 ahead
         lbsr    AHEAD
-        lbra    TGS
+        bra     TGS
 TGI     cmpa    #2
         bne     TGC
         lda     #2              ; cyan: Q = 2 ahead, target = 2Q - red
@@ -1183,15 +1182,14 @@ RN4     sty     SAVP
         ldu     #ENTS+ESIZE
         lda     #4
         sta     GCOUNT
-RN5     lbsr    GSPRITE         ; Y -> sprite table
-        lbsr    DRAWENT
+RN5     bsr     GSPRITE         ; Y -> sprite table
+        bsr     DRAWENT
         leau    ESIZE,u
         dec     GCOUNT
         bne     RN5
         ldu     #ENTS
-        lbsr    PSPRITE
-        lbsr    DRAWENT
-        rts
+        bsr     PSPRITE
+        bra     DRAWENT
 
 * DRAWENT: draw entity U with sprite Y into the back buffer, record its square
 DRAWENT ldx     SAVP
@@ -1262,12 +1260,12 @@ HUD     ldd     SCORE           ; every score digit differs from "the previous s
         lda     SCORE+2
         coma
         sta     OLDS+2
-        lbsr    HUDS
+        bsr     HUDS
         lda     #GL_L           ; L and the level number
         ldb     #CYANC
         ldx     #20
         lbsr    GLYPHAT
-        lbsr    LVDIG
+        bsr     LVDIG
         pshs    b
         ldb     #CYANC
         ldx     #22
@@ -1312,7 +1310,7 @@ HU2     leax    2,x
         anda    #$0F
         ldb     #WHITEC
         pshs    x,y
-        lbsr    GLYPHAT
+        bsr     GLYPHAT
         puls    x,y
 HU3     leax    2,x
         leay    1,y
@@ -1368,7 +1366,7 @@ MS2     ldx     MPTR
         stx     MPTR
         ldb     MCOL
         ldx     MOFF
-        lbsr    GLYPHAT
+        bsr     GLYPHAT
         ldd     MOFF
         addd    #2
         std     MOFF
@@ -1418,8 +1416,7 @@ MO1     lda     ,u+
 DRAWALL lbsr    RENDER
         lbsr    FLIP
         lbsr    RENDER
-        lbsr    FLIP
-        rts
+        lbra    FLIP
 
 * ---------------------------------------------------------------- score
 * ADDSCORE: add BCD D (A = hundreds, B = tens/units) to SCORE
@@ -1451,7 +1448,7 @@ ADDSCORE
         bhs     ASX
         inc     LIVES
         lda     #5              ; the fanfare
-        lbsr    SNDS
+        bsr     SNDS
         lbra    HUD             ; the lives are drawn too
 ASX     lbra    HUDS
 
@@ -1515,7 +1512,7 @@ AMFR    lda     #15
 AM4     cmpa    CURAMB
         beq     AMX
         sta     CURAMB
-        lbra    SNDS
+        bra     SNDS
 AMX     rts
 
 * ---------------------------------------------------------------- input
@@ -1545,7 +1542,7 @@ BK0     sta     ,x+
         lda     #4
         sta     BGN
 BK1     tst     E_MODE,y
-        lbne    BK3
+        bne     BK3
         lda     E_X,y
         adda    #2
         lsra
@@ -1578,7 +1575,7 @@ BK2A    inc     BDIR
         blo     BK2
 BK3     leay    ESIZE,y
         dec     BGN
-        lbne    BK1
+        bne     BK1
         ldx     #BFD            ; the start
         ldb     BSTART
         lda     #4
@@ -1588,7 +1585,7 @@ BK3     leay    ESIZE,y
         clr     BQT
         lda     ENTS+E_DIR      ; on a tie keep going the same way (a random tie-break
         sta     BD              ; on every tile made it dither between two dots), then
-        lbsr    BFIRST          ; the other ways in a per-game rotation (BSEED)
+        bsr     BFIRST          ; the other ways in a per-game rotation (BSEED)
         lda     BSEED
         anda    #3
         sta     BROT
@@ -1597,7 +1594,7 @@ BK4     lda     BDIR
         adda    BROT
         anda    #3
         sta     BD
-        lbsr    BFIRST
+        bsr     BFIRST
 BK5     inc     BDIR
         lda     BDIR
         cmpa    #4
@@ -1646,7 +1643,7 @@ BK8     lda     BDIR
         ldb     BCUR
         lbsr    BNBR
         stb     BN
-        lbsr    BPASS
+        bsr     BPASS
         bne     BK9
         ldx     #BFD
         ldb     BN
@@ -1662,7 +1659,7 @@ BK8     lda     BDIR
         ldb     BN
         abx
         sta     ,x
-        lbsr    BPUSH
+        bsr     BPUSH
 BK9     inc     BDIR
         lda     BDIR
         cmpa    #4
@@ -1671,9 +1668,9 @@ BK9     inc     BDIR
 BKFLEE  clr     BDIR            ; no safe path: any open, unblocked neighbour
 BKF1    lda     BDIR
         ldb     BSTART
-        lbsr    BNBR
+        bsr     BNBR
         stb     BN
-        lbsr    BPASS
+        bsr     BPASS
         bne     BKF2
         ldx     #BFD
         ldb     BN
@@ -1911,9 +1908,9 @@ DF1     ldx     BACK
 DF1A    ldx     #FLCOLS-1
         lda     b,x             ; FLN 1..7 (small: the signed offset is safe)
         sta     FLD             ; the door flashes with the walls
-        lbsr    WALLCOL
-        lbsr    WAITVS
-        lbsr    FLIP
+        bsr     WALLCOL
+        bsr     WAITVS
+        bsr     FLIP
         ldb     #FLFR-1
 DF2     pshs    b
         lbsr    WAITVS
@@ -1927,7 +1924,7 @@ DF2     pshs    b
         ldx     BACK
         stx     FLBUF
         lda     WCOL
-        lbsr    WALLCOL
+        bsr     WALLCOL
         lbsr    WAITVS
         lbsr    FLIP
         ldx     BACK
@@ -2029,7 +2026,7 @@ TAX     rts
 * runners. Silent: the intro tune plays when a game starts.
 SPLASH  lbsr    FILL3
         lda     #7
-        lbsr    SETF
+        bsr     SETF
         ldd     #BUF1
         std     BACK
         clr     VALID0
@@ -2144,7 +2141,7 @@ MI9     tfr     a,b
         deca
         anda    #3
         sta     MSEL
-        lbra    MJX
+        bra     MJX
 MJ1     bitb    #2
         beq     MJ2
         lda     MSEL
@@ -2198,11 +2195,10 @@ MJ7C    sta     SNDI
         beq     MJ7R
         cmpa    #4
         beq     MJ7R
-MJ7E    lbsr    SNDSET
+MJ7E    bsr     SNDSET
 MJX     lda     #9              ; the bounce for every move
         lbsr    SNDS
-        lbsr    MENUDRAW
-        rts
+        lbra    MENUDRAW
 
 * SNDSET: OPTSND decides the engine's output (and whether there is sound at all). The engine's modes:
 * 0 DAC, 1 Orchestra-90, 2 Games Master (Multi-Pak slot 2), 3 Speech/Sound (slot 1), 4 CoCoXSID (slot 3,
@@ -2242,7 +2238,7 @@ SLOTV   fcb     255,$11,$00,255,254
 
 * ABOUT: the story in SG24, page by page (the engine's code): any key or fire turns the page
 ABOUT   tst     ENGINE
-        lbeq    MJX
+        beq     MJX
         lda     LEVEL
         sta     STARTLV
         lda     COCO3
@@ -2253,7 +2249,7 @@ ABOUT   tst     ENGINE
 * JOYREAD: the right stick (the DAC and the comparator): A = how far over to the right (X) and B = how
 * far down (Y), 0..63. A stick that is not there reads 0,0.
 JOYDIR  clrb                    ; (directions)
-        lbsr    JOYXY
+        bsr     JOYXY
         sta     TMP             ; X
         stb     TX              ; Y
         tst     JSEEN
@@ -2463,11 +2459,20 @@ BB4     lda     ,y+
         rts
 
 * FILL3: clear both screens and the background copy ($0E00-$31FF) to black
-FILL3   ldx     #BUF0
+FILL3   ldu     #BG+3072        ; PSHU pre-decrements: from the top down, 48 bytes a pass (9,216 = 192 passes)
         ldd     #$8080
-FL3     std     ,x++
-        cmpx    #BG+3072
-        blo     FL3
+        ldx     #$8080
+        ldy     #$8080
+FL3     pshu    d,x,y
+        pshu    d,x,y
+        pshu    d,x,y
+        pshu    d,x,y
+        pshu    d,x,y
+        pshu    d,x,y
+        pshu    d,x,y
+        pshu    d,x,y
+        cmpu    #BUF0
+        bne     FL3
         rts
 
 * COPY3K: copy 3072 bytes from U to X with the stack: PULU D,X,Y / PSHS D,X,Y
